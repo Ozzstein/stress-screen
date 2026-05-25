@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 from scipy import stats as _stats
+from scipy.integrate import cumulative_trapezoid, trapezoid
 
 from stress_screen.models import MethodResult
 from stress_screen.analysis.util import robust_z
@@ -141,7 +142,7 @@ def run_isc_analysis(
         temp = d["temp_set"]
         t = d["t_set"]
         valid = ~np.isnan(temp)
-        if valid.sum() < 5 or np.nanstd(temp[valid]) < 1e-6:
+        if valid.sum() < 5 or np.nanstd(temp[valid]) < 0.01:
             s2_slope[ch] = np.nan
             continue
         slope, *_ = _stats.linregress(t[valid], temp[valid])
@@ -155,7 +156,6 @@ def run_isc_analysis(
     s3_area: dict[int, float] = {}
 
     if top_charge_df is not None and len(top_charge_df) >= 2 and not charge_cell_df.empty:
-        from scipy.integrate import cumulative_trapezoid
         _top = top_charge_df.sort_values("time_hours")
         t_pack = _top["time_hours"].values
         i_pack = np.abs(_top["current"].values)
@@ -179,7 +179,7 @@ def run_isc_analysis(
                     dv_dq = signal.savgol_filter(dv_dq, params.dv_smooth_window, 2)
                 except Exception:
                     pass
-            s3_area[ch] = float(np.trapz(np.abs(dv_dq), q_ch))
+            s3_area[ch] = float(trapezoid(np.abs(dv_dq), q_ch))
     else:
         for ch in channels:
             s3_area[ch] = np.nan
