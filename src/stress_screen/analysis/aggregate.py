@@ -30,6 +30,10 @@ def aggregate(
         Mapping of channel_index → MethodResult (1 li_plating method).
     topology:
         Pack topology describing module/channel layout.
+    isc_results:
+        Optional mapping of channel_index → MethodResult from ISC analysis.
+        When provided, the ISC z-score and MethodResult are appended to each
+        cell's composite (8 total methods). Defaults to None (7-method composite).
     z_thresh:
         Z-score threshold above which a method is counted as firing HIGH.
 
