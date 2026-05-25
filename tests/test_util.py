@@ -42,3 +42,35 @@ def test_winsorize_clip_preserves_nans():
     assert np.isnan(out[0])
     assert out[1] == 2.0
     assert out[2] == 5.0
+
+
+def test_protocol_metadata_defaults_lfp():
+    from stress_screen.analysis.protocol import ProtocolMetadata
+    p = ProtocolMetadata()
+    assert p.chemistry == "LFP"
+    assert 0.1 <= p.c_rate <= 3.0
+    assert p.nominal_capacity_ah > 0
+    assert p.voltage_window == (3.0, 3.65)
+
+
+def test_protocol_metadata_c_rate_scales_dqdv_threshold():
+    from stress_screen.analysis.protocol import ProtocolMetadata
+    p_slow = ProtocolMetadata(c_rate=0.2)
+    p_fast = ProtocolMetadata(c_rate=2.0)
+    assert p_fast.dqdv_prominence_pct() > p_slow.dqdv_prominence_pct()
+
+
+def test_protocol_metadata_c_rate_scales_dt_noise_floor():
+    from stress_screen.analysis.protocol import ProtocolMetadata
+    p_slow = ProtocolMetadata(c_rate=0.2)
+    p_fast = ProtocolMetadata(c_rate=2.0)
+    assert p_fast.dt_late_noise_floor_k() > p_slow.dt_late_noise_floor_k()
+
+
+def test_protocol_metadata_baseline_thresholds_at_default_c_rate():
+    """At the default C-rate (0.5), the scaling helpers should return the
+    baseline thresholds matching the historical hard-coded values."""
+    from stress_screen.analysis.protocol import ProtocolMetadata
+    p = ProtocolMetadata()  # default c_rate=0.5
+    assert p.dqdv_prominence_pct() == pytest.approx(0.05, abs=1e-9)
+    assert p.dt_late_noise_floor_k() == pytest.approx(0.3, abs=1e-9)
