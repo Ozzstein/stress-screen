@@ -279,12 +279,19 @@ def _run(args: argparse.Namespace) -> None:
     # Use the first charge segment (or empty frame if none)
     if charge_segs:
         first_charge = charge_segs[0]
+        charge_time_min = float(top_df.iloc[first_charge.start_row]["time_hours"])
+        charge_time_max = float(top_df.iloc[first_charge.end_row]["time_hours"])
         charge_cell_df = cell_df[
-            (cell_df["time_hours"] >= top_df.iloc[first_charge.start_row]["time_hours"])
-            & (cell_df["time_hours"] <= top_df.iloc[first_charge.end_row]["time_hours"])
+            (cell_df["time_hours"] >= charge_time_min)
+            & (cell_df["time_hours"] <= charge_time_max)
+        ].copy()
+        charge_top_df = top_df[
+            (top_df["time_hours"] >= charge_time_min)
+            & (top_df["time_hours"] <= charge_time_max)
         ].copy()
     else:
-        charge_cell_df = cell_df.iloc[0:0].copy()  # empty, same schema
+        charge_cell_df = cell_df.iloc[0:0].copy()
+        charge_top_df = top_df.iloc[0:0].copy()
 
     # ------------------------------------------------------------------
     # 5. Rest analysis (M1–M6)
@@ -301,13 +308,31 @@ def _run(args: argparse.Namespace) -> None:
     # For relaxation analysis use only the beginning of the rest window
     li_rest_cell_df = rest_cell_df
     prog.stage(f"Running Li-plating analysis on {n_active} channels...")
-    li_results = run_li_plating_analysis(charge_cell_df, li_rest_cell_df)
+    li_results = run_li_plating_analysis(
+        charge_cell_df,
+        li_rest_cell_df,
+        top_charge_df=charge_top_df,
+        n_parallel=topology.parallel,
+    )
+
+    # ------------------------------------------------------------------
+    # 6b. ISC analysis
+    # ------------------------------------------------------------------
+    from stress_screen.analysis.short_circuit import run_isc_analysis
+    prog.stage(f"Running ISC analysis on {n_active} channels...")
+    isc_results = run_isc_analysis(
+        rest_cell_df,
+        rest_results,
+        charge_cell_df,
+        top_charge_df=charge_top_df,
+        n_parallel=topology.parallel,
+    )
 
     # ------------------------------------------------------------------
     # 7. Aggregate into module verdicts
     # ------------------------------------------------------------------
     prog.stage("Aggregating verdicts...")
-    module_verdicts = aggregate(rest_results, li_results, topology)
+    module_verdicts = aggregate(rest_results, li_results, topology, isc_results=isc_results)
 
     result = AnalysisResult(
         csv_path=csv_path,
