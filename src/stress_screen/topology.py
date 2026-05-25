@@ -55,10 +55,13 @@ def _load_group_to_sensors(config_name: str, mapping_file: Path) -> dict[int, li
     with mapping_file.open("r", encoding="utf-8") as fh:
         data: dict[str, Any] = yaml.safe_load(fh)
 
+    if not data:
+        raise ValueError(f"temp_mapping.yaml at {mapping_file} is empty or invalid")
+
     if config_name not in data:
-        raise KeyError(
-            f"Config '{config_name}' not found in {mapping_file}. "
-            f"Available: {[k for k in data if not k.startswith('_')]}"
+        raise ValueError(
+            f"No temperature mapping for config '{config_name}' in {mapping_file}. "
+            f"Available: {sorted(data.keys())}"
         )
     raw: dict[Any, Any] = data[config_name]
     # YAML keys are already integers (bare integer keys in YAML are parsed as int)
@@ -99,6 +102,14 @@ def derive_topology(
         if the resulting ``parallel * series`` does not equal 32, or if the
         derived config is not one of the supported configs.
     """
+    # ------------------------------------------------------------------
+    # 0. Guard non-positive inputs
+    # ------------------------------------------------------------------
+    if module_count <= 0:
+        raise ValueError(f"module_count must be a positive integer, got {module_count!r}")
+    if active_channels <= 0:
+        raise ValueError(f"active_channels must be a positive integer, got {active_channels!r}")
+
     # ------------------------------------------------------------------
     # 1. Validate divisibility
     # ------------------------------------------------------------------
@@ -145,7 +156,7 @@ def derive_topology(
     temp_sensor_map: dict[tuple[int, int], list[int]] = {}
     for module_id in range(1, module_count + 1):
         for group_idx, sensor_list in group_to_sensors.items():
-            temp_sensor_map[(module_id, group_idx)] = sensor_list
+            temp_sensor_map[(module_id, group_idx)] = list(sensor_list)
 
     # ------------------------------------------------------------------
     # 4. Assemble and return
