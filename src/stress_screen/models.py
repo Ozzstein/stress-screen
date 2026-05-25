@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Literal
 
 
 # ---------------------------------------------------------------------------
@@ -29,10 +30,10 @@ class PackTopology:
     active_channels: int       # total active voltage channels across all modules
 
     # channel_index (0-based) → module_id (1-based)
-    _channel_module_map: dict[int, int] = field(default_factory=dict)
+    _channel_module_map: dict[int, int] = field(default_factory=dict, repr=False)
 
     # (module_id, group_index_within_module 1-based) → list of sensor indices
-    _temp_sensor_map: dict[tuple[int, int], list[int]] = field(default_factory=dict)
+    _temp_sensor_map: dict[tuple[int, int], list[int]] = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------
     # Convenience accessors
@@ -40,18 +41,29 @@ class PackTopology:
 
     def module_for_channel(self, channel_index: int) -> int:
         """Return the 1-based module that owns *channel_index* (0-based)."""
-        return self._channel_module_map[channel_index]
+        try:
+            return self._channel_module_map[channel_index]
+        except KeyError:
+            raise KeyError(
+                f"channel_index {channel_index!r} not in topology "
+                f"(valid range 0–{self.active_channels - 1})"
+            ) from None
 
     def channels_in_module(self, module_id: int) -> list[int]:
         """Return all 0-based channel indices that belong to *module_id*."""
-        return [
-            ch for ch, mid in self._channel_module_map.items() if mid == module_id
-        ]
+        if module_id < 1 or module_id > self.module_count:
+            raise ValueError(f"module_id {module_id!r} out of range (1–{self.module_count})")
+        return [ch for ch, mid in self._channel_module_map.items() if mid == module_id]
 
     def group_index_in_module(self, channel_index: int) -> int:
         """Return the 1-based group position of *channel_index* within its module."""
         module_id = self.module_for_channel(channel_index)
         module_channels = sorted(self.channels_in_module(module_id))
+        if channel_index not in module_channels:
+            raise ValueError(
+                f"channel_index {channel_index!r} maps to module {module_id} "
+                f"but is absent from that module's channel list — topology may be corrupt"
+            )
         return module_channels.index(channel_index) + 1
 
     def temp_sensors_for_group(
@@ -72,9 +84,12 @@ class Segment:
     phase: str           # "charge", "discharge", or "rest"
     start_time_h: float
     end_time_h: float
-    duration_h: float    # end_time_h - start_time_h
     start_row: int       # integer row index into the full DataFrame
     end_row: int
+
+    @property
+    def duration_h(self) -> float:
+        return self.end_time_h - self.start_time_h
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +102,8 @@ class MethodResult:
 
     method_name: str     # e.g. "M1_ocv_k", "M4_cusum", "li_plating"
     z_score: float
-    verdict: str         # "HIGH", "ELEVATED", or "NORMAL"
-    metadata: dict       # method-specific extras (e.g. {"k": 0.0023, "n_alarms": 5})
+    verdict: Literal["HIGH", "ELEVATED", "NORMAL"]
+    metadata: dict[str, Any]  # method-specific extras (e.g. {"k": 0.0023, "n_alarms": 5})
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +119,7 @@ class CellVerdict:
     group_in_module: int # 1-based group within module
     composite_z: float
     n_methods_high: int
-    verdict: str         # "HIGH", "ELEVATED", or "NORMAL"
+    verdict: Literal["HIGH", "ELEVATED", "NORMAL"]
     method_results: list[MethodResult]
 
     @property
@@ -122,7 +137,7 @@ class ModuleVerdict:
     """Pass/fail verdict for an entire module."""
 
     module_id: int
-    verdict: str                  # "OK" or "NOK"
+    verdict: Literal["OK", "NOK"]
     flagged_cells: list[CellVerdict]   # only HIGH cells
     all_cells: list[CellVerdict]
 
@@ -136,10 +151,9 @@ class ModuleVerdict:
         """
         if self.verdict == "OK":
             return f"M{self.module_id}: OK"
-
-        flagged_labels = ", ".join(
-            f"{c.label} ({c.verdict})" for c in self.flagged_cells
-        )
+        if not self.flagged_cells:
+            return f"M{self.module_id}: NOK  [no flagged cells recorded]"
+        flagged_labels = ", ".join(f"{c.label} ({c.verdict})" for c in self.flagged_cells)
         return f"M{self.module_id}: NOK  [cells flagged: {flagged_labels}]"
 
 
