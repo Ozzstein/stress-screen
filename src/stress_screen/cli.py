@@ -358,7 +358,8 @@ def _run(args: argparse.Namespace) -> None:
         from stress_screen.reports.html import write_html_report
         html_path = out_dir / f"{stem}_report.html"
         prog.stage(f"Writing HTML report -> {html_path}")
-        write_html_report(result, rest_cell_df, charge_cell_df, top_df, html_path)
+        write_html_report(result, rest_cell_df, charge_cell_df, top_df, html_path,
+                          top_charge_df=charge_top_df, n_parallel=topology.parallel)
         print(f"HTML report: {html_path}")
 
     if not args.no_pdf:

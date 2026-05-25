@@ -173,13 +173,20 @@ def run_isc_analysis(
                 continue
             q_ch = np.interp(ch_charge["time_hours"].values, t_pack, Q_pack)
             voltage = ch_charge["voltage"].values
-            dv_dq = np.gradient(voltage, q_ch)
+            # Deduplicate Q-axis — np.gradient requires strictly increasing x
+            mono = np.concatenate([[True], np.diff(q_ch) > 0])
+            if mono.sum() < 3:
+                s3_area[ch] = np.nan
+                continue
+            q_mono = q_ch[mono]
+            v_mono = voltage[mono]
+            dv_dq = np.gradient(v_mono, q_mono)
             if len(dv_dq) >= params.dv_smooth_window:
                 try:
                     dv_dq = signal.savgol_filter(dv_dq, params.dv_smooth_window, 2)
                 except Exception:
                     pass
-            s3_area[ch] = float(trapezoid(np.abs(dv_dq), q_ch))
+            s3_area[ch] = float(trapezoid(np.abs(dv_dq), q_mono))
     else:
         for ch in channels:
             s3_area[ch] = np.nan

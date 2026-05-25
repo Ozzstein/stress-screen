@@ -207,14 +207,59 @@ def ocv_fit_overlay(
 # 3. dv_dq_chart
 # ---------------------------------------------------------------------------
 
+def _build_q_axis(
+    top_charge_df: Optional[pd.DataFrame],
+    n_parallel: int,
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Build cumulative charge Q axis from pack-level charge data.
+
+    Returns (q_pack_time, q_pack_cumul) arrays, or (None, None) when
+    top_charge_df is None / too short.
+    """
+    if top_charge_df is None or len(top_charge_df) < 2:
+        return None, None
+    from scipy.integrate import cumulative_trapezoid as _cumtrapz
+    _top = top_charge_df.sort_values("time_hours")
+    t = _top["time_hours"].values
+    q = np.concatenate([
+        [0.0],
+        _cumtrapz(np.abs(_top["current"].values), t),
+    ]) / max(n_parallel, 1)
+    return t, q
+
+
+def _q_domain_dvdq(
+    voltage: np.ndarray,
+    time_h: np.ndarray,
+    q_pack_time: Optional[np.ndarray],
+    q_pack_cumul: Optional[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (x_axis, dv_dq) in Q domain when pack Q data is available.
+
+    Falls back to sample index when Q data is absent or after deduplication
+    leaves fewer than 3 points.
+    """
+    if q_pack_time is not None and q_pack_cumul is not None:
+        q_ch = np.interp(time_h, q_pack_time, q_pack_cumul)
+        # Remove duplicate Q points — np.gradient requires strictly increasing x
+        mono = np.concatenate([[True], np.diff(q_ch) > 0])
+        if mono.sum() >= 3:
+            return q_ch[mono], np.gradient(voltage[mono], q_ch[mono])
+    return np.arange(len(voltage)), np.gradient(voltage)
+
+
 def dv_dq_chart(
     result: AnalysisResult,
     module_id: int,
     charge_cell_df: Optional[pd.DataFrame] = None,
+    top_charge_df: Optional[pd.DataFrame] = None,
+    n_parallel: int = 1,
 ) -> go.Figure:
     """dV/dQ curves for each cell-group in a module during charge.
 
     HIGH cells: red, thick line.  Others: gray, thin, semi-transparent.
+    When top_charge_df is provided the x-axis is charge throughput Q (Ah);
+    otherwise falls back to sample index.
 
     Parameters
     ----------
@@ -226,11 +271,19 @@ def dv_dq_chart(
         Long-format cell DataFrame restricted to the charge phase.
         Columns: time_hours, channel_index, voltage.
         If None an empty figure with an annotation is returned.
+    top_charge_df:
+        Pack-level DataFrame for the charge segment (time_hours, current).
+        Used to build Q axis; optional.
+    n_parallel:
+        Number of parallel strings — divides pack current to per-string Q.
     """
+    q_pack_time, q_pack_cumul = _build_q_axis(top_charge_df, n_parallel)
+    x_label = "Charge throughput Q (Ah)" if q_pack_time is not None else "Sample index"
+
     fig = go.Figure()
     fig.update_layout(
         title=f"Module M{module_id} — dV/dQ (Li-plating indicator)",
-        xaxis_title="Sample index",
+        xaxis_title=x_label,
         yaxis_title="dV/dQ (smoothed)",
         template="plotly_white",
     )
@@ -258,7 +311,7 @@ def dv_dq_chart(
             continue
 
         voltage = ch_df["voltage"].values
-        dv_dq = np.gradient(voltage)
+        x_ax, dv_dq = _q_domain_dvdq(voltage, ch_df["time_hours"].values, q_pack_time, q_pack_cumul)
 
         # Smooth with Savitzky-Golay if possible
         win = 11
@@ -268,11 +321,10 @@ def dv_dq_chart(
             except Exception:
                 pass
 
-        # Downsample index
-        idx = np.arange(len(dv_dq))
-        if len(idx) > 2000:
-            step = max(1, len(idx) // 2000)
-            idx = idx[::step]
+        # Downsample
+        if len(x_ax) > 2000:
+            step = max(1, len(x_ax) // 2000)
+            x_ax = x_ax[::step]
             dv_dq = dv_dq[::step]
 
         verdict = verdict_map.get(ch, "NORMAL")
@@ -280,7 +332,7 @@ def dv_dq_chart(
 
         if verdict == "HIGH":
             fig.add_trace(go.Scatter(
-                x=idx,
+                x=x_ax,
                 y=dv_dq,
                 mode="lines",
                 name=lbl,
@@ -289,7 +341,7 @@ def dv_dq_chart(
             ))
         else:
             fig.add_trace(go.Scatter(
-                x=idx,
+                x=x_ax,
                 y=dv_dq,
                 mode="lines",
                 name=lbl,
@@ -310,12 +362,14 @@ def cell_detail_card(
     channel_index: int,
     rest_cell_df: Optional[pd.DataFrame] = None,
     charge_cell_df: Optional[pd.DataFrame] = None,
+    top_charge_df: Optional[pd.DataFrame] = None,
+    n_parallel: int = 1,
 ) -> go.Figure:
     """1×3 subplot detail card for a single flagged cell.
 
     Subplot 1: OCV voltage vs time (rest phase).
     Subplot 2: CUSUM trace from M4 metadata (if available).
-    Subplot 3: dV/dQ (charge phase).
+    Subplot 3: dV/dQ (charge phase) — Q-domain when top_charge_df provided.
 
     Parameters
     ----------
@@ -327,6 +381,10 @@ def cell_detail_card(
         Long-format cell DataFrame restricted to the rest phase.
     charge_cell_df:
         Long-format cell DataFrame restricted to the charge phase.
+    top_charge_df:
+        Pack-level DataFrame for the charge segment (time_hours, current).
+    n_parallel:
+        Number of parallel strings.
     """
     from scipy import signal as _signal  # local import
 
@@ -428,22 +486,23 @@ def cell_detail_card(
     fig.update_yaxes(title_text="CUSUM", row=1, col=2)
 
     # ---- Subplot 3: dV/dQ during charge ------------------------------------
+    q_pack_time, q_pack_cumul = _build_q_axis(top_charge_df, n_parallel)
+    x3_label = "Q (Ah)" if q_pack_time is not None else "Sample index"
     if charge_cell_df is not None and not charge_cell_df.empty:
         ch_chg = charge_cell_df[charge_cell_df["channel_index"] == channel_index].sort_values("time_hours")
         if len(ch_chg) >= 3:
             voltage = ch_chg["voltage"].values
-            dv_dq = np.gradient(voltage)
+            x_ax, dv_dq = _q_domain_dvdq(voltage, ch_chg["time_hours"].values, q_pack_time, q_pack_cumul)
             win = 11
             if len(dv_dq) >= win:
                 try:
                     dv_dq = _signal.savgol_filter(dv_dq, window_length=win, polyorder=2)
                 except Exception:
                     pass
-            idx = np.arange(len(dv_dq))
-            step = max(1, len(idx) // 2000)
+            step = max(1, len(x_ax) // 2000)
             fig.add_trace(
                 go.Scatter(
-                    x=idx[::step],
+                    x=x_ax[::step],
                     y=dv_dq[::step],
                     mode="lines",
                     line=dict(color="darkred", width=1.5),
@@ -451,7 +510,7 @@ def cell_detail_card(
                 ),
                 row=1, col=3,
             )
-    fig.update_xaxes(title_text="Sample index", row=1, col=3)
+    fig.update_xaxes(title_text=x3_label, row=1, col=3)
     fig.update_yaxes(title_text="dV/dQ", row=1, col=3)
 
     return fig

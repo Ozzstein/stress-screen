@@ -108,7 +108,12 @@ def _compute_dvdq_peak_sum(
         return 0.0
 
     if q_axis is not None:
-        dv_dq = np.gradient(voltage, q_axis)
+        # Deduplicate Q-axis — np.gradient requires strictly increasing x
+        mono = np.concatenate([[True], np.diff(q_axis) > 0])
+        if mono.sum() >= 3:
+            dv_dq = np.gradient(voltage[mono], q_axis[mono])
+        else:
+            dv_dq = np.gradient(voltage)
     else:
         dv_dq = np.gradient(voltage)
 

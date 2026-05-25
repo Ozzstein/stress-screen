@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -80,6 +80,8 @@ def write_html_report(
     charge_cell_df: pd.DataFrame,
     top_df: pd.DataFrame,
     out_path: Path,
+    top_charge_df: Optional[pd.DataFrame] = None,
+    n_parallel: int = 1,
 ) -> None:
     """Write a standalone HTML report to *out_path*.
 
@@ -98,6 +100,11 @@ def write_html_report(
         Pack-level DataFrame (time_hours, current, voltage, …).
     out_path:
         Destination file path; parent directory must already exist.
+    top_charge_df:
+        Pack-level DataFrame restricted to the charge segment — used to build
+        the Q axis for dV/dQ charts. Optional; falls back to sample index.
+    n_parallel:
+        Number of parallel strings (divides pack current to per-string Q).
     """
     topo = result.topology
 
@@ -174,7 +181,7 @@ def write_html_report(
         mid = mv.module_id
 
         ocv_fig = ocv_fit_overlay(result, mid, rest_cell_df)
-        dvdq_fig = dv_dq_chart(result, mid, charge_cell_df)
+        dvdq_fig = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
 
         # Flagged cell detail cards
         flagged_cells_data: list[dict[str, Any]] = []
@@ -184,6 +191,8 @@ def write_html_report(
                 fc.channel_index,
                 rest_cell_df,
                 charge_cell_df,
+                top_charge_df=top_charge_df,
+                n_parallel=n_parallel,
             )
             isc_mr = next((mr for mr in fc.method_results if mr.method_name == "isc"), None)
             isc_detail = None
