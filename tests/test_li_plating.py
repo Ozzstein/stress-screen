@@ -39,3 +39,15 @@ def test_li_plating_metadata_keys():
         assert "dv_dq_z" in mr.metadata
         assert "relaxation_z" in mr.metadata
         assert "charge_time_z" in mr.metadata
+
+
+def test_injected_cell_has_higher_dv_dq():
+    charge = _make_charge_df(n_channels=8)
+    rest = _make_rest_df(n_channels=8)
+    results = run_li_plating_analysis(charge, rest)
+    ch0_dv_z = results[0].metadata["dv_dq_z"]
+    other_dv_z = [results[ch].metadata["dv_dq_z"] for ch in range(1, 8)]
+    import numpy as np
+    # Channel 0 has an injected peak, should have higher dv_dq_z than the median
+    assert ch0_dv_z > float(np.nanmedian(other_dv_z)), \
+        f"Expected ch0 dv_dq_z={ch0_dv_z:.3f} > median others {np.nanmedian(other_dv_z):.3f}"

@@ -8,12 +8,12 @@ No external dependencies required to open the report.
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from stress_screen.models import AnalysisResult
 from stress_screen.reports.charts import (
@@ -105,18 +105,16 @@ def write_html_report(
     # 1. Header metadata
     # ------------------------------------------------------------------
     pack_id = result.csv_path.stem
-    test_date = (
-        pd.to_datetime(top_df["time_hours"].iloc[0], unit="h").strftime("%Y-%m-%d")
-        if not top_df.empty and "time_hours" in top_df.columns
-        else "unknown"
-    )
-    # Prefer absolute wall-clock time if the CSV carries it; fall back to
-    # the test date extracted from the filename (DDMMYYYY pattern).
+    # Try to extract test date from the filename (P<DDMMYYYY> pattern).
+    # Fall back to today rather than deriving from time_hours (which is
+    # elapsed time starting at 0, not a wall-clock timestamp).
     import re as _re
     date_match = _re.search(r"_P(\d{2})(\d{2})(\d{4})_", result.csv_path.name)
     if date_match:
         day, month, year = date_match.group(1), date_match.group(2), date_match.group(3)
         test_date = f"{year}-{month}-{day}"
+    else:
+        test_date = date.today().isoformat()  # fallback — elapsed time ≠ wall-clock
 
     config_str = (
         f"{topo.module_count} modules, "
@@ -212,7 +210,7 @@ def write_html_report(
     templates_dir = _templates_dir()
     env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
-        autoescape=False,  # we handle safe HTML ourselves
+        autoescape=select_autoescape(["html", "j2"]),
     )
     template = env.get_template("report.html.j2")
 

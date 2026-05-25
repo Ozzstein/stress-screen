@@ -50,6 +50,13 @@ class RestParams:
     min_points: int = 60
     """Minimum data points required per channel to run analysis."""
 
+    k_max: float = 0.05
+    """Upper bound for the self-discharge rate k in the OCV curve fit.
+
+    Default 0.05 h⁻¹ is wide enough to capture severely discharging cells
+    (the original hardcoded 0.005 was too tight for some real-world cases).
+    """
+
 
 # ---------------------------------------------------------------------------
 # Verdict helper
@@ -169,8 +176,8 @@ def run_rest_analysis(
 
         p0 = [np.nanmean(v), 0.05, 1.0, 0.0001]
         bounds = (
-            [V_low, 0.0,  0.05, 0.0  ],
-            [V_high, 0.4, 24.0, 0.005],
+            [V_low, 0.0,  0.05, 0.0        ],
+            [V_high, 0.4, 24.0, params.k_max],
         )
 
         try:

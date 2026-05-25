@@ -39,7 +39,22 @@ def aggregate(
     # --- Cell-level aggregation -------------------------------------------------
     cell_verdicts: dict[int, CellVerdict] = {}
 
-    all_channels = sorted(rest_results.keys())
+    _missing_in_li = set(rest_results.keys()) - set(li_plating_results.keys())
+    _missing_in_rest = set(li_plating_results.keys()) - set(rest_results.keys())
+    if _missing_in_li:
+        import warnings
+        warnings.warn(
+            f"aggregate(): {len(_missing_in_li)} channels in rest_results missing from "
+            f"li_plating_results — skipped: {sorted(_missing_in_li)[:5]}..."
+        )
+    if _missing_in_rest:
+        import warnings
+        warnings.warn(
+            f"aggregate(): {len(_missing_in_rest)} channels in li_plating_results missing "
+            f"from rest_results — skipped"
+        )
+
+    all_channels = sorted(set(rest_results.keys()) & set(li_plating_results.keys()))
 
     for ch in all_channels:
         # 1. Collect all z-scores (6 rest + 1 li_plating = 7 total)

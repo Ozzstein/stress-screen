@@ -243,16 +243,16 @@ def _run(args: argparse.Namespace) -> None:
     # Use the longest rest segment for OCV analysis
     longest_rest = rest_segs[0]
     rest_cell_df = cell_df[
-        (cell_df["time_hours"] >= top_df.loc[longest_rest.start_row, "time_hours"])
-        & (cell_df["time_hours"] <= top_df.loc[longest_rest.end_row, "time_hours"])
+        (cell_df["time_hours"] >= top_df.iloc[longest_rest.start_row]["time_hours"])
+        & (cell_df["time_hours"] <= top_df.iloc[longest_rest.end_row]["time_hours"])
     ].copy()
 
     # Use the first charge segment (or empty frame if none)
     if charge_segs:
         first_charge = charge_segs[0]
         charge_cell_df = cell_df[
-            (cell_df["time_hours"] >= top_df.loc[first_charge.start_row, "time_hours"])
-            & (cell_df["time_hours"] <= top_df.loc[first_charge.end_row, "time_hours"])
+            (cell_df["time_hours"] >= top_df.iloc[first_charge.start_row]["time_hours"])
+            & (cell_df["time_hours"] <= top_df.iloc[first_charge.end_row]["time_hours"])
         ].copy()
     else:
         charge_cell_df = cell_df.iloc[0:0].copy()  # empty, same schema

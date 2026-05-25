@@ -213,7 +213,7 @@ def _page2_module_table(result: AnalysisResult, styles: dict) -> list:
         # Body
         ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
         ("FONTSIZE", (0, 1), (-1, -1), 9),
-        ("ROWBACKGROUND", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
