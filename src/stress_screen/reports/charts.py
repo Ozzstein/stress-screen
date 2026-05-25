@@ -228,24 +228,42 @@ def _build_q_axis(
     return t, q
 
 
-def _q_domain_dvdq(
+def _compute_dqdv(
     voltage: np.ndarray,
     time_h: np.ndarray,
     q_pack_time: Optional[np.ndarray],
     q_pack_cumul: Optional[np.ndarray],
+    dv_step: float = 0.002,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return (x_axis, dv_dq) in Q domain when pack Q data is available.
+    """Compute dQ/dV via voltage-domain resampling at *dv_step* V intervals.
 
-    Falls back to sample index when Q data is absent or after deduplication
-    leaves fewer than 3 points.
+    Follows ICA best-practice: resample before differentiating (implicit
+    smoothing), no post-gradient filter. Returns empty arrays when Q data
+    is unavailable — caller must handle the empty-array case.
     """
-    if q_pack_time is not None and q_pack_cumul is not None:
-        q_ch = np.interp(time_h, q_pack_time, q_pack_cumul)
-        # Remove duplicate Q points — np.gradient requires strictly increasing x
-        mono = np.concatenate([[True], np.diff(q_ch) > 0])
-        if mono.sum() >= 3:
-            return q_ch[mono], np.gradient(voltage[mono], q_ch[mono])
-    return np.arange(len(voltage)), np.gradient(voltage)
+    if q_pack_time is None or q_pack_cumul is None:
+        return np.array([]), np.array([])
+
+    q_ch = np.interp(time_h, q_pack_time, q_pack_cumul)
+
+    # Sort by voltage, remove duplicate V values
+    idx = np.argsort(voltage)
+    v_s = voltage[idx]
+    q_s = q_ch[idx]
+    mono = np.concatenate([[True], np.diff(v_s) > 0])
+    v_s, q_s = v_s[mono], q_s[mono]
+
+    if len(v_s) < 5:
+        return np.array([]), np.array([])
+
+    v_grid = np.arange(v_s[0], v_s[-1] + dv_step, dv_step)
+    if len(v_grid) < 5:
+        return np.array([]), np.array([])
+
+    q_interp = np.interp(v_grid, v_s, q_s)
+    dqdv = np.gradient(q_interp, v_grid)
+    dqdv = np.clip(dqdv, 0.0, None)  # non-physical negative values removed
+    return v_grid, dqdv
 
 
 def dv_dq_chart(
@@ -255,11 +273,11 @@ def dv_dq_chart(
     top_charge_df: Optional[pd.DataFrame] = None,
     n_parallel: int = 1,
 ) -> go.Figure:
-    """dV/dQ curves for each cell-group in a module during charge.
+    """dQ/dV (Incremental Capacity Analysis) curves for each cell-group in a module during charge.
 
     HIGH cells: red, thick line.  Others: gray, thin, semi-transparent.
-    When top_charge_df is provided the x-axis is charge throughput Q (Ah);
-    otherwise falls back to sample index.
+    Requires top_charge_df to build the Q axis; returns an annotated empty
+    figure when Q data is absent.
 
     Parameters
     ----------
@@ -278,13 +296,12 @@ def dv_dq_chart(
         Number of parallel strings — divides pack current to per-string Q.
     """
     q_pack_time, q_pack_cumul = _build_q_axis(top_charge_df, n_parallel)
-    x_label = "Charge throughput Q (Ah)" if q_pack_time is not None else "Sample index"
 
     fig = go.Figure()
     fig.update_layout(
-        title=f"Module M{module_id} — dV/dQ (Li-plating indicator)",
-        xaxis_title=x_label,
-        yaxis_title="dV/dQ (smoothed)",
+        title=f"Module M{module_id} — dQ/dV (Incremental Capacity)",
+        xaxis_title="Voltage (V)",
+        yaxis_title="dQ/dV (Ah/V)",
         template="plotly_white",
     )
 
@@ -292,7 +309,12 @@ def dv_dq_chart(
         fig.add_annotation(text="No charge data provided", showarrow=False, xref="paper", yref="paper", x=0.5, y=0.5)
         return fig
 
-    from scipy import signal as _signal  # local import to avoid top-level dependency at import time
+    if q_pack_time is None:
+        fig.add_annotation(
+            text="Q data required for dQ/dV — pass top_charge_df",
+            showarrow=False, xref="paper", yref="paper", x=0.5, y=0.5,
+        )
+        return fig
 
     topo = result.topology
     mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
@@ -307,33 +329,25 @@ def dv_dq_chart(
 
     for ch in channels:
         ch_df = charge_cell_df[charge_cell_df["channel_index"] == ch].sort_values("time_hours")
-        if len(ch_df) < 3:
+        if len(ch_df) < 5:
             continue
 
-        voltage = ch_df["voltage"].values
-        x_ax, dv_dq = _q_domain_dvdq(voltage, ch_df["time_hours"].values, q_pack_time, q_pack_cumul)
-
-        # Smooth with Savitzky-Golay if possible
-        win = 11
-        if len(dv_dq) >= win:
-            try:
-                dv_dq = _signal.savgol_filter(dv_dq, window_length=win, polyorder=2)
-            except Exception:
-                pass
-
-        # Downsample
-        if len(x_ax) > 2000:
-            step = max(1, len(x_ax) // 2000)
-            x_ax = x_ax[::step]
-            dv_dq = dv_dq[::step]
+        v_grid, dqdv = _compute_dqdv(
+            ch_df["voltage"].values,
+            ch_df["time_hours"].values,
+            q_pack_time,
+            q_pack_cumul,
+        )
+        if len(v_grid) == 0:
+            continue
 
         verdict = verdict_map.get(ch, "NORMAL")
         lbl = label_map.get(ch, f"Ch{ch}")
 
         if verdict == "HIGH":
             fig.add_trace(go.Scatter(
-                x=x_ax,
-                y=dv_dq,
+                x=v_grid,
+                y=dqdv,
                 mode="lines",
                 name=lbl,
                 line=dict(color="red", width=2.5),
@@ -341,8 +355,8 @@ def dv_dq_chart(
             ))
         else:
             fig.add_trace(go.Scatter(
-                x=x_ax,
-                y=dv_dq,
+                x=v_grid,
+                y=dqdv,
                 mode="lines",
                 name=lbl,
                 line=dict(color="lightgray", width=1),
@@ -369,7 +383,7 @@ def cell_detail_card(
 
     Subplot 1: OCV voltage vs time (rest phase).
     Subplot 2: CUSUM trace from M4 metadata (if available).
-    Subplot 3: dV/dQ (charge phase) — Q-domain when top_charge_df provided.
+    Subplot 3: dQ/dV (charge phase) — voltage-domain ICA when top_charge_df provided.
 
     Parameters
     ----------
@@ -396,7 +410,7 @@ def cell_detail_card(
     fig = make_subplots(
         rows=1,
         cols=3,
-        subplot_titles=["OCV (rest)", "CUSUM (M4)", "dV/dQ (charge)"],
+        subplot_titles=["OCV (rest)", "CUSUM (M4)", "dQ/dV (charge)"],
         horizontal_spacing=0.10,
     )
     fig.update_layout(
@@ -485,33 +499,30 @@ def cell_detail_card(
     fig.update_xaxes(title_text="Sample index", row=1, col=2)
     fig.update_yaxes(title_text="CUSUM", row=1, col=2)
 
-    # ---- Subplot 3: dV/dQ during charge ------------------------------------
+    # ---- Subplot 3: dQ/dV during charge ------------------------------------
     q_pack_time, q_pack_cumul = _build_q_axis(top_charge_df, n_parallel)
-    x3_label = "Q (Ah)" if q_pack_time is not None else "Sample index"
     if charge_cell_df is not None and not charge_cell_df.empty:
         ch_chg = charge_cell_df[charge_cell_df["channel_index"] == channel_index].sort_values("time_hours")
-        if len(ch_chg) >= 3:
-            voltage = ch_chg["voltage"].values
-            x_ax, dv_dq = _q_domain_dvdq(voltage, ch_chg["time_hours"].values, q_pack_time, q_pack_cumul)
-            win = 11
-            if len(dv_dq) >= win:
-                try:
-                    dv_dq = _signal.savgol_filter(dv_dq, window_length=win, polyorder=2)
-                except Exception:
-                    pass
-            step = max(1, len(x_ax) // 2000)
-            fig.add_trace(
-                go.Scatter(
-                    x=x_ax[::step],
-                    y=dv_dq[::step],
-                    mode="lines",
-                    line=dict(color="darkred", width=1.5),
-                    name="dV/dQ",
-                ),
-                row=1, col=3,
+        if len(ch_chg) >= 5:
+            v_grid, dqdv = _compute_dqdv(
+                ch_chg["voltage"].values,
+                ch_chg["time_hours"].values,
+                q_pack_time,
+                q_pack_cumul,
             )
-    fig.update_xaxes(title_text=x3_label, row=1, col=3)
-    fig.update_yaxes(title_text="dV/dQ", row=1, col=3)
+            if len(v_grid) > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=v_grid,
+                        y=dqdv,
+                        mode="lines",
+                        line=dict(color="darkred", width=1.5),
+                        name="dQ/dV",
+                    ),
+                    row=1, col=3,
+                )
+    fig.update_xaxes(title_text="Voltage (V)", row=1, col=3)
+    fig.update_yaxes(title_text="dQ/dV (Ah/V)", row=1, col=3)
 
     return fig
 

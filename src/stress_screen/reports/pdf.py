@@ -283,8 +283,10 @@ def _pages_per_module(
     page_h: float,
     margin: float,
     styles: dict,
+    top_charge_df: "pd.DataFrame | None" = None,
+    n_parallel: int = 1,
 ) -> list:
-    """Two charts per page (OCV fit + dV/dQ) for each module."""
+    """Two charts per page (OCV fit + dQ/dV) for each module."""
     flowables = []
     usable_w = page_w - 2 * margin
     chart_h = (page_h - 2 * margin - 4 * cm) / 2  # two charts, allow space for heading
@@ -292,7 +294,7 @@ def _pages_per_module(
     for mv in result.module_verdicts:
         mid = mv.module_id
 
-        flowables.append(Paragraph(f"Module M{mid} — OCV Fit &amp; dV/dQ", styles["h2"]))
+        flowables.append(Paragraph(f"Module M{mid} — OCV Fit &amp; dQ/dV", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
 
         # OCV fit overlay
@@ -302,8 +304,8 @@ def _pages_per_module(
 
         flowables.append(Spacer(1, 0.3 * cm))
 
-        # dV/dQ
-        fig_dvdq = dv_dq_chart(result, mid, charge_cell_df)
+        # dQ/dV
+        fig_dvdq = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
         img_dvdq = _fig_to_image(fig_dvdq, usable_w, chart_h)
         flowables.append(img_dvdq)
 
@@ -322,6 +324,8 @@ def write_pdf_report(
     charge_cell_df: pd.DataFrame,
     top_df: pd.DataFrame,
     out_path: Path,
+    top_charge_df: "pd.DataFrame | None" = None,
+    n_parallel: int = 1,
 ) -> None:
     """Write a PDF report to *out_path*.
 
@@ -385,6 +389,7 @@ def write_pdf_report(
     story += _pages_per_module(
         result, rest_cell_df, charge_cell_df,
         PAGE_W, PAGE_H, MARGIN, styles,
+        top_charge_df=top_charge_df, n_parallel=n_parallel,
     )
 
     doc.build(story)

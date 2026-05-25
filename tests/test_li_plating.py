@@ -3,16 +3,39 @@ import numpy as np
 from stress_screen.analysis.li_plating import run_li_plating_analysis, LiPlatingParams
 
 def _make_charge_df(n_channels=5, n_points=200):
+    """LFP-like charge profile: main plateau + fast end-of-charge rise.
+
+    Channel 0 has a secondary plateau at 3.5 V injected into the
+    end-of-charge region — simulating a plating-induced dQ/dV extra peak
+    above the main LFP plateau.
+    """
     rows = []
     for ch in range(n_channels):
         t = np.linspace(0, 2.0, n_points)
-        V = 3.2 + 0.4 * (t / t.max())  # healthy: smooth ramp
+        frac = t / t[-1]
+        # Pre-plateau (0–10 %): 3.0 → 3.3 V
+        # Main LFP plateau (10–80 %): 3.3 → 3.4 V (slow rise)
+        # End-of-charge (80–100 %): 3.4 → 3.65 V (fast rise)
+        V = np.where(
+            frac < 0.10,
+            3.0 + 3.0 * frac,
+            np.where(
+                frac < 0.80,
+                3.3 + (frac - 0.10) / 0.70 * 0.10,
+                3.4 + (frac - 0.80) / 0.20 * 0.25,
+            ),
+        )
         if ch == 0:
-            # inject extra prominence mid-charge
+            # Replace first half of end-of-charge with a flat plateau at 3.5 V.
+            # In dQ/dV (voltage-domain) this creates a secondary peak above the
+            # main plateau — the expected Li-plating signature.
+            plateau_start = int(0.80 * n_points)
+            plateau_end = int(0.90 * n_points)
             V = V.copy()
-            V[120:130] += 0.05  # artificial bump -> extra dV/dQ peak
+            V[plateau_start:plateau_end] = 3.5
         for i in range(n_points):
-            rows.append({"time_hours": t[i], "channel_index": ch, "voltage": V[i], "temperature": 25.0})
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": 25.0})
     return pd.DataFrame(rows)
 
 def _make_rest_df(n_channels=5, n_points=100):
@@ -36,7 +59,7 @@ def test_li_plating_metadata_keys():
     rest = _make_rest_df()
     results = run_li_plating_analysis(charge, rest)
     for mr in results.values():
-        assert "dv_dq_z" in mr.metadata
+        assert "dqdv_z" in mr.metadata
         assert "relaxation_z" in mr.metadata
         assert "charge_time_z" in mr.metadata
         # New temperature-related metadata keys
@@ -45,7 +68,7 @@ def test_li_plating_metadata_keys():
         assert "T_mean_charge" in mr.metadata
         assert "dT_late" in mr.metadata
         assert "temperature_gate" in mr.metadata
-        assert "gated_dv_dq_z" in mr.metadata
+        assert "gated_dqdv_z" in mr.metadata
         assert "gated_relaxation_z" in mr.metadata
         assert "gated_charge_time_z" in mr.metadata
 
@@ -67,16 +90,18 @@ def test_cold_cell_flagged():
     assert ch3.metadata["temperature_gate"] > 0.5, f"gate={ch3.metadata['temperature_gate']}"
 
 
-def test_injected_cell_has_higher_dv_dq():
+def test_injected_cell_has_higher_dqdv_z():
+    """Channel 0's secondary plateau creates a higher dqdv_z than healthy peers."""
     charge = _make_charge_df(n_channels=8)
     rest = _make_rest_df(n_channels=8)
-    results = run_li_plating_analysis(charge, rest)
-    ch0_dv_z = results[0].metadata["dv_dq_z"]
-    other_dv_z = [results[ch].metadata["dv_dq_z"] for ch in range(1, 8)]
-    import numpy as np
-    # Channel 0 has an injected peak, should have higher dv_dq_z than the median
-    assert ch0_dv_z > float(np.nanmedian(other_dv_z)), \
-        f"Expected ch0 dv_dq_z={ch0_dv_z:.3f} > median others {np.nanmedian(other_dv_z):.3f}"
+    top_charge = _make_top_charge_df(current=5.0)
+    results = run_li_plating_analysis(charge, rest, top_charge_df=top_charge, n_parallel=1)
+    ch0_dqdv_z = results[0].metadata["dqdv_z"]
+    other_dqdv_z = [results[ch].metadata["dqdv_z"] for ch in range(1, 8)]
+    assert ch0_dqdv_z > float(np.nanmedian(other_dqdv_z)), (
+        f"Expected ch0 dqdv_z={ch0_dqdv_z:.3f} > median others "
+        f"{np.nanmedian(other_dqdv_z):.3f}"
+    )
 
 
 import warnings
@@ -88,22 +113,24 @@ def _make_top_charge_df(n_points=200, current=5.0):
 
 
 def test_dvdq_uses_q_domain():
-    """Peak prominence sum must differ between Q-domain and index-domain calls."""
+    """With Q data, ch0's secondary plateau produces a non-zero dqdv_extra_peak_sum;
+    without Q data the metric returns 0 (requires Q for voltage-domain dQ/dV)."""
     charge = _make_charge_df(n_channels=5)
     rest = _make_rest_df(n_channels=5)
-    top_charge = _make_top_charge_df(current=5.0)  # dq ≈ 0.05 Ah/sample → ~20× scale factor
+    top_charge = _make_top_charge_df(current=5.0)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        results_idx = run_li_plating_analysis(charge, rest)
+        results_no_q = run_li_plating_analysis(charge, rest)
     results_q = run_li_plating_analysis(charge, rest, top_charge_df=top_charge, n_parallel=1)
 
-    # Channel 0 has an injected bump → non-zero prominence in both calls
-    idx_sum = results_idx[0].metadata["peak_prominence_sum"]
-    q_sum = results_q[0].metadata["peak_prominence_sum"]
-    assert idx_sum > 0, "Injected peak on ch0 should give non-zero index-based prominence"
-    assert abs(q_sum - idx_sum) / (idx_sum + 1e-10) > 0.01, (
-        f"Q-domain prominence {q_sum:.6f} too similar to index-based {idx_sum:.6f}"
+    # Without Q data the metric is undefined → 0
+    assert results_no_q[0].metadata["dqdv_extra_peak_sum"] == 0.0, (
+        "dqdv_extra_peak_sum must be 0 when top_charge_df is absent"
+    )
+    # With Q data, ch0's secondary plateau creates a detectable extra peak
+    assert results_q[0].metadata["dqdv_extra_peak_sum"] > 0.0, (
+        "Injected secondary plateau on ch0 should produce non-zero dqdv_extra_peak_sum"
     )
 
 
@@ -116,7 +143,7 @@ def test_dvdq_fallback_no_top_df():
         results = run_li_plating_analysis(charge, rest)
     assert len(results) == 5
     messages = " ".join(str(w.message) for w in caught).lower()
-    assert "index" in messages or "top_charge_df" in messages, (
+    assert "top_charge_df" in messages or "q data" in messages or "q-domain" in messages, (
         f"Expected Q-domain fallback warning, got: {[str(w.message) for w in caught]}"
     )
 

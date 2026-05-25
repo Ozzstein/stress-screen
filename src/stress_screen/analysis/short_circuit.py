@@ -18,7 +18,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy import signal
 from scipy import stats as _stats
 from scipy.integrate import cumulative_trapezoid, trapezoid
 
@@ -34,7 +33,9 @@ class ShortCircuitParams:
     isc_k_sigma: float = 3.0
     settling_h: float = 2.0
     min_points: int = 60
-    dv_smooth_window: int = 11
+    n_q_resample: int = 500
+    """Number of uniformly-spaced Q points for S3 dV/dQ resampling.
+    Pre-resampling replaces post-gradient Savitzky-Golay smoothing."""
     peak_prominence_pct: float = 0.05
 
 
@@ -173,20 +174,18 @@ def run_isc_analysis(
                 continue
             q_ch = np.interp(ch_charge["time_hours"].values, t_pack, Q_pack)
             voltage = ch_charge["voltage"].values
-            # Deduplicate Q-axis — np.gradient requires strictly increasing x
+            # Keep strictly increasing Q for interpolation
             mono = np.concatenate([[True], np.diff(q_ch) > 0])
             if mono.sum() < 3:
                 s3_area[ch] = np.nan
                 continue
             q_mono = q_ch[mono]
             v_mono = voltage[mono]
-            dv_dq = np.gradient(v_mono, q_mono)
-            if len(dv_dq) >= params.dv_smooth_window:
-                try:
-                    dv_dq = signal.savgol_filter(dv_dq, params.dv_smooth_window, 2)
-                except Exception:
-                    pass
-            s3_area[ch] = float(trapezoid(np.abs(dv_dq), q_mono))
+            # Resample at uniform ΔQ (implicit smoothing — no post-gradient filter)
+            q_grid = np.linspace(q_mono[0], q_mono[-1], params.n_q_resample)
+            v_interp = np.interp(q_grid, q_mono, v_mono)
+            dv_dq = np.gradient(v_interp, q_grid)
+            s3_area[ch] = float(trapezoid(np.abs(dv_dq), q_grid))
     else:
         for ch in channels:
             s3_area[ch] = np.nan

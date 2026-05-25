@@ -55,11 +55,13 @@ class LiPlatingParams:
     relaxation_window_h: float = 0.5
     """Hours of post-charge rest to analyse (first N hours)."""
 
-    dv_smooth_window: int = 11
-    """Savitzky-Golay smoothing window length for dV/dQ."""
+    dv_step_v: float = 0.002
+    """Voltage resampling step (V) for dQ/dV computation.
+    Resampling before differentiating is the recommended ICA approach —
+    it acts as implicit smoothing without distorting peak shapes."""
 
     peak_prominence_pct: float = 0.05
-    """Minimum peak prominence as fraction of the dV/dQ range."""
+    """Minimum peak prominence as fraction of the dQ/dV range."""
 
     T_plating_threshold_c: float = 20.0
     """Charge-mean temperature (°C) above which plating is essentially
@@ -90,54 +92,51 @@ def _verdict(z: float, z_thresh: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Sub-method 1: dV/dQ extra peak detection
+# Sub-method 1: dQ/dV (incremental capacity) extra peak detection
 # ---------------------------------------------------------------------------
 
-def _compute_dvdq_peak_sum(
+def _compute_dqdv_peak_sum(
     voltage: np.ndarray,
-    smooth_window: int,
+    q_axis: np.ndarray | None,
+    dv_step: float,
     peak_prominence_pct: float,
-    q_axis: np.ndarray | None = None,
 ) -> float:
-    """Return the sum of peak prominences in the smoothed dV/dQ signal.
+    """Return sum of peak prominences in the dQ/dV (incremental capacity) curve.
 
-    Uses voltage gradient w.r.t. q_axis when provided (physically correct
-    Q-domain), otherwise falls back to gradient w.r.t. sample index.
+    Resamples at *dv_step*-V intervals before differentiating — per ICA
+    best-practice: smooth before, not after, the derivative. Returns 0.0
+    when *q_axis* is None (Q data required for this metric).
     """
-    if len(voltage) < 3:
+    if q_axis is None or len(voltage) < 5:
         return 0.0
 
-    if q_axis is not None:
-        # Deduplicate Q-axis — np.gradient requires strictly increasing x
-        mono = np.concatenate([[True], np.diff(q_axis) > 0])
-        if mono.sum() >= 3:
-            dv_dq = np.gradient(voltage[mono], q_axis[mono])
-        else:
-            dv_dq = np.gradient(voltage)
-    else:
-        dv_dq = np.gradient(voltage)
+    # Sort by voltage, remove duplicate V values
+    idx = np.argsort(voltage)
+    v_s = voltage[idx]
+    q_s = q_axis[idx]
+    mono = np.concatenate([[True], np.diff(v_s) > 0])
+    v_s, q_s = v_s[mono], q_s[mono]
 
-    # Apply Savitzky-Golay smoothing if we have enough points
-    if len(dv_dq) >= smooth_window:
-        try:
-            dv_dq_smooth = signal.savgol_filter(
-                dv_dq, window_length=smooth_window, polyorder=2
-            )
-        except Exception:
-            dv_dq_smooth = dv_dq
-    else:
-        dv_dq_smooth = dv_dq
+    if len(v_s) < 5:
+        return 0.0
 
-    ptp = np.ptp(dv_dq_smooth)
+    # Resample at uniform ΔV grid (implicit smoothing — no post-gradient filter)
+    v_grid = np.arange(v_s[0], v_s[-1] + dv_step, dv_step)
+    if len(v_grid) < 5:
+        return 0.0
+
+    q_interp = np.interp(v_grid, v_s, q_s)
+    dqdv = np.gradient(q_interp, v_grid)
+    dqdv = np.clip(dqdv, 0.0, None)  # negative values are non-physical during charge
+
+    ptp = np.ptp(dqdv)
     if ptp < 1e-12:
         return 0.0
 
     min_prominence = peak_prominence_pct * ptp
 
     try:
-        _, props = signal.find_peaks(
-            dv_dq_smooth, prominence=min_prominence
-        )
+        _, props = signal.find_peaks(dqdv, prominence=min_prominence)
         prominences = props.get("prominences", np.array([]))
         return float(np.sum(prominences)) if len(prominences) > 0 else 0.0
     except Exception:
@@ -229,8 +228,9 @@ def run_li_plating_analysis(
     q_pack_cumul: np.ndarray | None = None
     if top_charge_df is None:
         warnings.warn(
-            "run_li_plating_analysis: top_charge_df not provided; dV/dQ computed vs "
-            "sample index (physically incorrect). Pass top_charge_df for Q-domain analysis.",
+            "run_li_plating_analysis: top_charge_df not provided; dQ/dV (incremental "
+            "capacity) sub-method requires Q data and will return 0. "
+            "Pass top_charge_df for Q-domain analysis.",
             UserWarning,
             stacklevel=2,
         )
@@ -243,8 +243,8 @@ def run_li_plating_analysis(
         ]) / max(n_parallel, 1)
     else:  # len == 1
         warnings.warn(
-            "run_li_plating_analysis: top_charge_df has fewer than 2 rows; dV/dQ computed vs "
-            "sample index (physically incorrect). Pass a valid top_charge_df for Q-domain analysis.",
+            "run_li_plating_analysis: top_charge_df has fewer than 2 rows; dQ/dV "
+            "sub-method will return 0. Pass a valid top_charge_df for Q-domain analysis.",
             UserWarning,
             stacklevel=2,
         )
@@ -263,7 +263,7 @@ def run_li_plating_analysis(
 
     for ch in tqdm(
         channels,
-        desc="  Li-plating (dV/dQ peaks)",
+        desc="  Li-plating (dQ/dV peaks)",
         unit="ch",
         leave=False,
         file=sys.stderr,
@@ -281,11 +281,11 @@ def run_li_plating_analysis(
                 q_ch = np.interp(
                     ch_charge["time_hours"].values, q_pack_time, q_pack_cumul
                 )
-            dv_metrics[ch] = _compute_dvdq_peak_sum(
+            dv_metrics[ch] = _compute_dqdv_peak_sum(
                 ch_charge["voltage"].values,
-                smooth_window=params.dv_smooth_window,
-                peak_prominence_pct=params.peak_prominence_pct,
                 q_axis=q_ch,
+                dv_step=params.dv_step_v,
+                peak_prominence_pct=params.peak_prominence_pct,
             )
 
     # ------------------------------------------------------------------
@@ -445,21 +445,21 @@ def run_li_plating_analysis(
             z_score=z,
             verdict=verdict,
             metadata={
-                # Existing electrical signatures
-                "dv_dq_z": dv_z,
+                # Electrical signatures
+                "dqdv_z": dv_z,
                 "relaxation_z": relax_z,
                 "charge_time_z": time_z,
-                "peak_prominence_sum": float(dv_metrics[ch]),
+                "dqdv_extra_peak_sum": float(dv_metrics[ch]),
                 "tau_inv": float(relax_metrics[ch]),
                 "charge_duration_h": float(time_metrics[ch]),
-                # New temperature signatures
+                # Temperature signatures
                 "cold_z": cold_z,
                 "heat_z": heat_z,
                 "T_mean_charge": float(T_mean_charge_metrics[ch]),
                 "dT_late": float(dT_late_metrics[ch]),
                 "temperature_gate": gate,
                 # Gated electrical z-scores (after T-gating)
-                "gated_dv_dq_z": gated_dv_z,
+                "gated_dqdv_z": gated_dv_z,
                 "gated_relaxation_z": gated_relax_z,
                 "gated_charge_time_z": gated_time_z,
             },

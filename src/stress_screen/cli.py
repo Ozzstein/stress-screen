@@ -377,7 +377,8 @@ def _run(args: argparse.Namespace) -> None:
         from stress_screen.reports.pdf import write_pdf_report
         pdf_path = out_dir / f"{stem}_report.pdf"
         prog.stage(f"Writing PDF report -> {pdf_path}")
-        write_pdf_report(result, rest_cell_df, charge_cell_df, top_df, pdf_path)
+        write_pdf_report(result, rest_cell_df, charge_cell_df, top_df, pdf_path,
+                         top_charge_df=charge_top_df, n_parallel=topology.parallel)
         print(f"PDF report:  {pdf_path}")
 
     prog.stage("Done.")
