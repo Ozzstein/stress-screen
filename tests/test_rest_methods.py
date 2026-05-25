@@ -36,3 +36,68 @@ def test_m1_flags_high_k_cells():
     # Both bad channels should be HIGH
     for ch in bad:
         assert m1_verdicts[ch] in ("HIGH", "ELEVATED"), f"ch {ch} expected HIGH/ELEVATED, got {m1_verdicts[ch]}"
+
+
+def test_m5_arrhenius_vs_linear():
+    """M5 Arrhenius-corrected k at 35°C must differ from the old linear approx by >1%."""
+    rng = np.random.default_rng(42)
+    rest_df = _make_rest_cell_df(n_channels=8, rng=rng)
+    rest_df["temperature"] = 35.0
+    topo = derive_topology(8, 1)
+    results = run_rest_analysis(rest_df, topo)
+
+    checked = False
+    for ch, mrs in results.items():
+        m1 = next((mr for mr in mrs if mr.method_name == "M1_ocv_k"), None)
+        m5 = next((mr for mr in mrs if mr.method_name == "M5_temp_k"), None)
+        if m1 is None or m5 is None:
+            continue
+        k_raw = m1.metadata.get("k", float("nan"))
+        k_corr = m5.metadata.get("k_corrected", float("nan"))
+        if np.isnan(k_raw) or np.isnan(k_corr) or k_raw < 1e-10:
+            continue
+        k_linear = k_raw / (1.0 + 0.02 * (35.0 - 25.0))  # old formula: k / 1.2
+        assert abs(k_corr - k_linear) / k_linear > 0.01, (
+            f"ch{ch}: Arrhenius {k_corr:.8f} vs linear {k_linear:.8f} — "
+            f"difference {100 * abs(k_corr - k_linear) / k_linear:.2f}% must be >1%"
+        )
+        checked = True
+        break
+
+    assert checked, "No channel produced valid M1+M5 data — check _make_rest_cell_df or min_points"
+
+
+def test_m6_slope_penalises_trending_cell():
+    """Channel with declining rank but frac_bot20=0 gets higher M6 z after slope fix."""
+    rng = np.random.default_rng(0)
+    n_channels = 8
+    t = np.linspace(0, 10, 600)
+    rows = []
+    for ch in range(n_channels):
+        if ch == 0:
+            # starts highest (~87th pct), drifts toward 3rd rank — never below 20th pct
+            V = 3.450 + 0.050 * np.exp(-t / 2.0) - 0.004 * t + rng.normal(0, 1e-4, len(t))
+        elif ch in (1, 2):
+            # permanently lowest (rank 1 and 2 → always below 20th pct with 8 channels)
+            V = 3.395 + (ch - 1) * 0.002 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 1e-4, len(t))
+        else:
+            # stable middle channels, slope ≈ 0
+            V = 3.420 + (ch - 3) * 0.003 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 1e-4, len(t))
+        T = 25.0 + rng.normal(0, 0.05, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n_channels, 1)
+    results = run_rest_analysis(rest_df, topo)
+
+    m6_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "M6_rank")
+    # Only compare against stable middle channels (ch3–ch7); they have near-zero slope
+    m6_z_stable = [
+        next(mr.z_score for mr in results[ch] if mr.method_name == "M6_rank")
+        for ch in range(3, 8)
+    ]
+    assert m6_z_ch0 > float(np.nanmedian(m6_z_stable)) + 0.5, (
+        f"Trending ch0 M6 z={m6_z_ch0:.3f} should be > stable median "
+        f"{np.nanmedian(m6_z_stable):.3f} + 0.5"
+    )

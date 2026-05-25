@@ -60,6 +60,12 @@ class RestParams:
     (the original hardcoded 0.005 was too tight for some real-world cases).
     """
 
+    arrhenius_ea_ev: float = 0.5
+    """Activation energy (eV) for Arrhenius self-discharge temperature correction (LFP default)."""
+
+    m6_slope_weight: float = 0.5
+    """Weight applied to the rank-slope penalty term in the M6 composite score."""
+
 
 # ---------------------------------------------------------------------------
 # Verdict helper
@@ -346,14 +352,12 @@ def run_rest_analysis(
         m5_T_mean[ch] = T_mean
 
         if not np.isnan(T_mean):
-            # Arrhenius approximation: k_corrected = k / (1 + 0.02*(T-25))
-            denom = 1.0 + 0.02 * (T_mean - 25.0)
-            if abs(denom) > 1e-6:
-                m5_k_corr[ch] = k_raw / denom
-            else:
-                m5_k_corr[ch] = k_raw
+            T_K = T_mean + 273.15
+            T_ref_K = 298.15
+            Ea_J = params.arrhenius_ea_ev * 96_485.0  # eV → J/mol
+            correction = np.exp(-Ea_J / 8.314 * (1.0 / T_ref_K - 1.0 / T_K))
+            m5_k_corr[ch] = k_raw * correction
         else:
-            # No temperature data — fall back to raw k
             m5_k_corr[ch] = k_raw
 
     k_corr_arr = np.array([m5_k_corr[ch] for ch in channels])
@@ -366,6 +370,7 @@ def run_rest_analysis(
     m6_mean_rank: dict[int, float] = {}
     m6_frac_bot20: dict[int, float] = {}
     m6_rank_slope: dict[int, float] = {}
+    m6_t_span: dict[int, float] = {}
 
     if not pivot_v.empty:
         rank_pct = pivot_v.rank(axis=1, pct=True, method="average") * 100.0
@@ -387,19 +392,33 @@ def run_rest_analysis(
                 m6_mean_rank[ch] = mean_rank
                 m6_frac_bot20[ch] = frac_bot20
                 m6_rank_slope[ch] = float(slope_r)
+                t_span_ch = float(t_r[-1] - t_r[0]) if len(t_r) >= 2 else 0.0
+                m6_t_span[ch] = t_span_ch
             else:
                 m6_mean_rank[ch] = np.nan
                 m6_frac_bot20[ch] = np.nan
                 m6_rank_slope[ch] = np.nan
+                m6_t_span[ch] = 0.0
     else:
         for ch in channels:
             m6_mean_rank[ch] = np.nan
             m6_frac_bot20[ch] = np.nan
             m6_rank_slope[ch] = np.nan
+            m6_t_span[ch] = 0.0
 
-    frac_arr = np.array([m6_frac_bot20[ch] for ch in channels])
-    frac_z_arr = robust_z(frac_arr)
-    m6_z: dict[int, float] = {ch: float(frac_z_arr[i]) for i, ch in enumerate(channels)}
+    m6_score: dict[int, float] = {}
+    for ch in channels:
+        fb = m6_frac_bot20.get(ch, np.nan)
+        if np.isnan(fb):
+            m6_score[ch] = np.nan
+        else:
+            slope = m6_rank_slope.get(ch, 0.0)
+            t_span = m6_t_span.get(ch, 0.0)
+            m6_score[ch] = fb + params.m6_slope_weight * max(0.0, -slope * t_span)
+
+    score_arr = np.array([m6_score[ch] for ch in channels])
+    score_z_arr = robust_z(score_arr)
+    m6_z: dict[int, float] = {ch: float(score_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
     # Assemble results                                                      #
