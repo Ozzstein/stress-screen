@@ -278,3 +278,25 @@ def test_protocol_scales_dt_noise_guard():
         "0.5C protocol: 0.4 K ΔT must pass 0.3 K noise floor → finite heat_z"
     assert np.isnan(fast_protocol[0].metadata["heat_z"]), \
         "2.0C protocol: 0.4 K ΔT below 0.6 K floor → heat_z must be nan"
+
+
+def test_dqdv_extra_peak_voltage_metric_independent_of_q_scale():
+    """Plating creates an extra dQ/dV peak above the main plateau. The
+    EXTRA-PEAK-VOLTAGE metric (highest peak position) should be robust to
+    scaling the Q axis by an arbitrary factor."""
+    charge = _make_charge_df(n_channels=5)
+    rest = _make_rest_df(n_channels=5)
+    top_charge = _make_top_charge_df(current=5.0)
+    top_charge_scaled = _make_top_charge_df(current=15.0)  # 3x current
+
+    results_a = run_li_plating_analysis(charge, rest, top_charge_df=top_charge, n_parallel=1)
+    results_b = run_li_plating_analysis(charge, rest, top_charge_df=top_charge_scaled, n_parallel=1)
+
+    v_a = results_a[0].metadata.get("dqdv_extra_peak_voltage")
+    v_b = results_b[0].metadata.get("dqdv_extra_peak_voltage")
+    assert v_a is not None and not np.isnan(v_a), "extra-peak-voltage missing under Q-scale A"
+    assert v_b is not None and not np.isnan(v_b), "extra-peak-voltage missing under Q-scale B"
+    assert abs(v_a - v_b) < 0.01, (
+        f"Peak voltage should be invariant to Q-axis scale: "
+        f"v_a={v_a:.4f}, v_b={v_b:.4f}"
+    )
