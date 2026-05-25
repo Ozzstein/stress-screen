@@ -277,11 +277,14 @@ def _run(args: argparse.Namespace) -> None:
         & (cell_df["time_hours"] <= top_df.iloc[longest_rest.end_row]["time_hours"])
     ].copy()
 
-    # Use the first charge segment (or empty frame if none)
+    # Use the last charge segment that ended before the longest rest began.
+    # This is the conditioning charge whose signatures (dV/dQ, relaxation,
+    # temperature) are most informative for plating and ISC detection.
     if charge_segs:
-        first_charge = charge_segs[0]
-        charge_time_min = float(top_df.iloc[first_charge.start_row]["time_hours"])
-        charge_time_max = float(top_df.iloc[first_charge.end_row]["time_hours"])
+        pre_rest = [s for s in charge_segs if s.end_time_h <= longest_rest.start_time_h]
+        target_charge = pre_rest[-1] if pre_rest else charge_segs[-1]
+        charge_time_min = float(top_df.iloc[target_charge.start_row]["time_hours"])
+        charge_time_max = float(top_df.iloc[target_charge.end_row]["time_hours"])
         charge_cell_df = cell_df[
             (cell_df["time_hours"] >= charge_time_min)
             & (cell_df["time_hours"] <= charge_time_max)
@@ -293,6 +296,14 @@ def _run(args: argparse.Namespace) -> None:
     else:
         charge_cell_df = cell_df.iloc[0:0].copy()
         charge_top_df = top_df.iloc[0:0].copy()
+
+    if charge_segs:
+        charge_idx = charge_segs.index(target_charge) + 1
+        prog.stage(
+            f"Using charge cycle {charge_idx}/{len(charge_segs)} "
+            f"({charge_time_min:.2f}–{charge_time_max:.2f} h) "
+            f"for Li-plating / ISC analysis"
+        )
 
     # ------------------------------------------------------------------
     # 5. Rest analysis (M1–M6)
