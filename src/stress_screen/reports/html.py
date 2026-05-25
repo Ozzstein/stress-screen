@@ -185,14 +185,51 @@ def write_html_report(
                 rest_cell_df,
                 charge_cell_df,
             )
+            isc_mr = next((mr for mr in fc.method_results if mr.method_name == "isc"), None)
+            isc_detail = None
+            if isc_mr:
+                meta = isc_mr.metadata
+                def _fmt(v):
+                    return f"{v:.3f}" if (v == v) else "—"
+                isc_detail = {
+                    "s1_z": _fmt(meta.get("s1_excess_k_z", float("nan"))),
+                    "s1_excess_k": _fmt(meta.get("s1_excess_k", float("nan"))),
+                    "s2_z": _fmt(meta.get("s2_dT_dt_z", float("nan"))),
+                    "s2_slope": _fmt(meta.get("s2_dT_dt_slope", float("nan"))),
+                    "s3_z": _fmt(meta.get("s3_area_deficit_z", float("nan"))),
+                    "s3_area": _fmt(meta.get("s3_dvdq_area", float("nan"))),
+                }
             flagged_cells_data.append(
                 {
                     "label": fc.label,
                     "composite_z": fc.composite_z,
                     "method_results": fc.method_results,
+                    "isc_detail": isc_detail,
                     "detail_chart": _render(detail_fig),
                 }
             )
+
+        # Build all-cell method data for the module table
+        all_cells_data: list[dict[str, Any]] = []
+        for cv in mv.all_cells:
+            method_rows = []
+            for mr in cv.method_results:
+                z = mr.z_score
+                z_str = f"{z:.2f}" if (z == z) else "—"  # NaN check
+                method_rows.append({
+                    "method_name": mr.method_name,
+                    "z_str": z_str,
+                    "verdict": mr.verdict,
+                    "metadata": mr.metadata,
+                })
+            all_cells_data.append({
+                "label": cv.label,
+                "composite_z": cv.composite_z,
+                "verdict": cv.verdict,
+                "method_rows": method_rows,
+            })
+
+        method_names = [mr["method_name"] for mr in all_cells_data[0]["method_rows"]] if all_cells_data else []
 
         module_details.append(
             {
@@ -201,6 +238,8 @@ def write_html_report(
                 "ocv_chart": _render(ocv_fig),
                 "dvdq_chart": _render(dvdq_fig),
                 "flagged_cells": flagged_cells_data,
+                "all_cells": all_cells_data,
+                "method_names": method_names,
             }
         )
 

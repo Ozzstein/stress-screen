@@ -167,6 +167,63 @@
     background: var(--elevated-bg); color: var(--elevated-fg); border-color: var(--elevated-fg);
   }
 
+  /* ---- method z-score table ---- */
+  .method-table-wrap { overflow-x: auto; margin-top: 1.25rem; }
+  .method-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .method-table thead th {
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 700;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 2px solid var(--border);
+    text-align: center;
+    white-space: nowrap;
+  }
+  .method-table thead th:first-child { text-align: left; }
+  .method-table tbody tr { border-bottom: 1px solid var(--border); }
+  .method-table tbody tr:last-child { border-bottom: none; }
+  .method-table tbody td { padding: 0.45rem 0.6rem; text-align: center; font-size: 0.82rem; vertical-align: middle; }
+  .method-table tbody td:first-child { text-align: left; font-weight: 600; }
+  .method-table tbody tr.row-high td:first-child { color: var(--nok-fg); }
+  .method-table tbody tr.row-elevated td:first-child { color: var(--elevated-fg); }
+  .z-high   { color: var(--nok-fg);      font-weight: 700; }
+  .z-elevated { color: var(--elevated-fg); font-weight: 600; }
+  .z-normal { color: var(--text-muted); }
+
+  /* ---- ISC sub-score panel ---- */
+  .isc-panel {
+    margin-top: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+  }
+  .isc-panel h5 {
+    font-size: 0.78rem; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 0.6rem;
+  }
+  .isc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem 1rem;
+  }
+  .isc-sub {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+  .isc-sub .isc-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; }
+  .isc-sub .isc-z { font-size: 1rem; font-weight: 700; color: var(--text); }
+  .isc-sub .isc-raw { color: var(--text-muted); font-size: 0.75rem; }
+
   /* ---- full-width chart section ---- */
   .chart-section {
     background: var(--surface);
@@ -325,6 +382,35 @@
         </div>
       </div>
 
+      {% if mod.all_cells %}
+      <div class="method-table-wrap">
+        <table class="method-table">
+          <thead>
+            <tr>
+              <th>Cell</th>
+              <th>Composite Z</th>
+              {% for mname in mod.method_names %}
+              <th>{{ mname | replace("_", " ") }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for cell in mod.all_cells %}
+            <tr class="{% if cell.verdict == 'HIGH' %}row-high{% elif cell.verdict == 'ELEVATED' %}row-elevated{% endif %}">
+              <td>{{ cell.label }}</td>
+              <td class="{% if cell.composite_z >= 2.0 %}z-high{% elif cell.composite_z >= 1.0 %}z-elevated{% else %}z-normal{% endif %}">
+                {{ "%.2f" | format(cell.composite_z) }}
+              </td>
+              {% for mr in cell.method_rows %}
+              <td class="z-{{ mr.verdict | lower }}">{{ mr.z_str }}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
       {% if mod.flagged_cells %}
         {% for cell in mod.flagged_cells %}
         <div class="cell-card">
@@ -338,6 +424,30 @@
               {% endif %}
             {% endfor %}
           </div>
+
+          {% if cell.isc_detail %}
+          <div class="isc-panel">
+            <h5>ISC Sub-Scores</h5>
+            <div class="isc-grid">
+              <div class="isc-sub">
+                <div class="isc-label">S1 — Excess self-discharge</div>
+                <div class="isc-z">z = {{ cell.isc_detail.s1_z }}</div>
+                <div class="isc-raw">excess k = {{ cell.isc_detail.s1_excess_k }}</div>
+              </div>
+              <div class="isc-sub">
+                <div class="isc-label">S2 — Thermal slope during rest</div>
+                <div class="isc-z">z = {{ cell.isc_detail.s2_z }}</div>
+                <div class="isc-raw">dT/dt = {{ cell.isc_detail.s2_slope }} °C/h</div>
+              </div>
+              <div class="isc-sub">
+                <div class="isc-label">S3 — dV/dQ area deficit</div>
+                <div class="isc-z">z = {{ cell.isc_detail.s3_z }}</div>
+                <div class="isc-raw">area = {{ cell.isc_detail.s3_area }}</div>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
           {{ cell.detail_chart | safe }}
         </div>
         {% endfor %}
