@@ -39,6 +39,32 @@ def test_li_plating_metadata_keys():
         assert "dv_dq_z" in mr.metadata
         assert "relaxation_z" in mr.metadata
         assert "charge_time_z" in mr.metadata
+        # New temperature-related metadata keys
+        assert "cold_z" in mr.metadata
+        assert "heat_z" in mr.metadata
+        assert "T_mean_charge" in mr.metadata
+        assert "dT_late" in mr.metadata
+        assert "temperature_gate" in mr.metadata
+        assert "gated_dv_dq_z" in mr.metadata
+        assert "gated_relaxation_z" in mr.metadata
+        assert "gated_charge_time_z" in mr.metadata
+
+
+def test_cold_cell_flagged():
+    """A cell charging at low T should fire the cold_z signature."""
+    charge = _make_charge_df(n_channels=8)
+    rest = _make_rest_df(n_channels=8)
+    # Make channel 3 cold during charge: 5°C instead of 25°C
+    charge.loc[charge["channel_index"] == 3, "temperature"] = 5.0
+    results = run_li_plating_analysis(charge, rest)
+    ch3 = results[3]
+    others = [results[c] for c in range(8) if c != 3]
+    # cold_z for ch3 should be much higher than the median of others
+    other_cold = [r.metadata["cold_z"] for r in others]
+    assert ch3.metadata["cold_z"] > float(np.nanmedian(other_cold)) + 0.5, \
+        f"Cold cell cold_z={ch3.metadata['cold_z']:.3f} not significantly above others median {np.nanmedian(other_cold):.3f}"
+    # Temperature gate should be active for ch3
+    assert ch3.metadata["temperature_gate"] > 0.5, f"gate={ch3.metadata['temperature_gate']}"
 
 
 def test_injected_cell_has_higher_dv_dq():

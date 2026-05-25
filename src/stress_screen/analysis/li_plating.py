@@ -2,11 +2,18 @@
 analysis/li_plating.py — Li-plating detection module for stress_screen.
 
 Analyses charge-phase and early-rest-phase data to detect Lithium plating
-in individual cell-groups using three complementary sub-methods:
+in individual cell-groups using five complementary sub-methods:
 
   1. dV/dQ extra peak detection (anomalous inflections near end-of-charge)
   2. Post-charge voltage relaxation speed (faster drop → re-intercalation)
   3. Charge-time anomaly (unusually long charge duration)
+  4. Cold-charge anomaly (cells charging colder than the fleet)
+  5. Late-charge ΔT — heat-of-plating signature (exothermic plating)
+
+The three electrical signatures (1–3) are gated by temperature: a cell
+warmer than ``T_plating_threshold_c`` cannot meaningfully plate, so its
+electrical z-scores are scaled down. Cold cells receive full (or boosted)
+weight on the electrical signatures.
 
 Public API
 ----------
@@ -49,6 +56,14 @@ class LiPlatingParams:
 
     peak_prominence_pct: float = 0.05
     """Minimum peak prominence as fraction of the dV/dQ range."""
+
+    T_plating_threshold_c: float = 15.0
+    """Charge-mean temperature (°C) above which plating is essentially
+    impossible; electrical signatures are gated out above this value."""
+
+    T_default_gate: float = 0.5
+    """Gate value used when temperature data is missing for a channel
+    (mid-risk — neither fully trust nor fully gate)."""
 
 
 # ---------------------------------------------------------------------------
@@ -248,15 +263,90 @@ def run_li_plating_analysis(
             time_metrics[ch] = float(t.max() - t.min())
 
     # ------------------------------------------------------------------
+    # Sub-method 4 & 5: Temperature-based signatures (charge phase)
+    # ------------------------------------------------------------------
+    T_mean_charge_metrics: dict[int, float] = {}
+    dT_late_metrics: dict[int, float] = {}
+
+    has_temperature = "temperature" in charge_cell_df.columns
+
+    for ch in channels:
+        ch_charge = (
+            charge_cell_df[charge_cell_df["channel_index"] == ch]
+            .sort_values("time_hours")
+        )
+
+        if not has_temperature or len(ch_charge) == 0:
+            T_mean_charge_metrics[ch] = np.nan
+            dT_late_metrics[ch] = np.nan
+            continue
+
+        temps = ch_charge["temperature"].values.astype(float)
+
+        # All-NaN safeguard
+        if np.all(np.isnan(temps)):
+            T_mean_charge_metrics[ch] = np.nan
+            dT_late_metrics[ch] = np.nan
+            continue
+
+        T_mean_charge_metrics[ch] = float(np.nanmean(temps))
+
+        # Late-charge ΔT: last 20% vs 60-80% window
+        n = len(temps)
+        if n < 5:
+            dT_late_metrics[ch] = np.nan
+            continue
+
+        i_mid_lo = int(np.floor(0.60 * n))
+        i_mid_hi = int(np.floor(0.80 * n))
+        i_late_lo = int(np.floor(0.80 * n))
+        # Inclusive of end → use n as upper bound
+
+        T_mid = temps[i_mid_lo:i_mid_hi]
+        T_late = temps[i_late_lo:n]
+
+        if len(T_mid) == 0 or len(T_late) == 0:
+            dT_late_metrics[ch] = np.nan
+            continue
+
+        T_mid_mean = float(np.nanmean(T_mid))
+        T_late_mean = float(np.nanmean(T_late))
+
+        if np.isnan(T_mid_mean) or np.isnan(T_late_mean):
+            dT_late_metrics[ch] = np.nan
+        else:
+            dT_late_metrics[ch] = T_late_mean - T_mid_mean
+
+    # ------------------------------------------------------------------
     # Compute robust z-scores for each sub-method
     # ------------------------------------------------------------------
     dv_arr = np.array([dv_metrics[ch] for ch in channels])
     relax_arr = np.array([relax_metrics[ch] for ch in channels])
     time_arr = np.array([time_metrics[ch] for ch in channels])
+    T_mean_arr = np.array([T_mean_charge_metrics[ch] for ch in channels])
+    dT_late_arr = np.array([dT_late_metrics[ch] for ch in channels])
 
     dv_scores = robust_z(dv_arr)
     relax_scores = robust_z(relax_arr)
     time_scores = robust_z(time_arr)
+
+    # Cold-charge anomaly: INVERTED — cold (low T) means high z (suspicious)
+    cold_scores = -robust_z(T_mean_arr)
+    # Heat-of-plating: higher ΔT_late → higher z (suspicious)
+    heat_scores = robust_z(dT_late_arr)
+
+    # ------------------------------------------------------------------
+    # Cold-temperature gating for electrical signatures
+    # ------------------------------------------------------------------
+    T_thr = params.T_plating_threshold_c
+    gates: list[float] = []
+    for T_mean in T_mean_arr:
+        if np.isnan(T_mean):
+            gate = params.T_default_gate
+        else:
+            gate = max(0.0, T_thr - float(T_mean)) / T_thr
+            gate = min(1.5, gate)
+        gates.append(gate)
 
     # ------------------------------------------------------------------
     # Assemble MethodResult per channel
@@ -267,9 +357,23 @@ def run_li_plating_analysis(
         dv_z = float(dv_scores[i])
         relax_z = float(relax_scores[i])
         time_z = float(time_scores[i])
+        cold_z = float(cold_scores[i])
+        heat_z = float(heat_scores[i])
+        gate = float(gates[i])
 
-        valid = [s for s in [dv_z, relax_z, time_z] if not np.isnan(s)]
-        z = float(np.nanmean([dv_z, relax_z, time_z])) if valid else np.nan
+        # Force temperature signatures to NaN if no T data for this channel
+        if np.isnan(T_mean_arr[i]):
+            cold_z = float("nan")
+            heat_z = float("nan")
+
+        # Apply gating to electrical signatures
+        gated_dv_z = dv_z * gate if not np.isnan(dv_z) else float("nan")
+        gated_relax_z = relax_z * gate if not np.isnan(relax_z) else float("nan")
+        gated_time_z = time_z * gate if not np.isnan(time_z) else float("nan")
+
+        five = [gated_dv_z, gated_relax_z, gated_time_z, cold_z, heat_z]
+        valid = [s for s in five if not np.isnan(s)]
+        z = float(np.nanmean(five)) if valid else float("nan")
 
         verdict = _verdict(z, params.z_thresh)
 
@@ -278,12 +382,23 @@ def run_li_plating_analysis(
             z_score=z,
             verdict=verdict,
             metadata={
+                # Existing electrical signatures
                 "dv_dq_z": dv_z,
                 "relaxation_z": relax_z,
                 "charge_time_z": time_z,
                 "peak_prominence_sum": float(dv_metrics[ch]),
                 "tau_inv": float(relax_metrics[ch]),
                 "charge_duration_h": float(time_metrics[ch]),
+                # New temperature signatures
+                "cold_z": cold_z,
+                "heat_z": heat_z,
+                "T_mean_charge": float(T_mean_charge_metrics[ch]),
+                "dT_late": float(dT_late_metrics[ch]),
+                "temperature_gate": gate,
+                # Gated electrical z-scores (after T-gating)
+                "gated_dv_dq_z": gated_dv_z,
+                "gated_relaxation_z": gated_relax_z,
+                "gated_charge_time_z": gated_time_z,
             },
         )
 
