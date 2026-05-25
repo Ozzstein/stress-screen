@@ -130,3 +130,34 @@ def test_s3_fallback_no_top_df():
             f"ch{ch} s3_dvdq_area should be nan when top_charge_df absent, "
             f"got {mr.metadata['s3_dvdq_area']}"
         )
+
+
+def test_isc_aggregate_integration():
+    """Full aggregate with ISC produces CellVerdict with 8 method_results."""
+    import warnings
+    from stress_screen.analysis.rest import run_rest_analysis
+    from stress_screen.analysis.li_plating import run_li_plating_analysis
+    from stress_screen.analysis.aggregate import aggregate
+    from stress_screen.topology import derive_topology
+
+    n_channels = 8
+    rest_df = _make_isc_rest_df()
+    charge_df = _make_charge_df_for_isc()
+    topo = derive_topology(n_channels, 1)
+
+    full_rest_results = run_rest_analysis(rest_df, topo)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        li_results = run_li_plating_analysis(charge_df, rest_df)
+    isc_results = run_isc_analysis(rest_df, full_rest_results, charge_df)
+
+    module_verdicts = aggregate(
+        full_rest_results, li_results, topo, isc_results=isc_results
+    )
+
+    for mv in module_verdicts:
+        for cv in mv.all_cells:
+            assert len(cv.method_results) == 8, (
+                f"{cv.label}: expected 8 method_results "
+                f"(6 rest + 1 li_plating + 1 isc), got {len(cv.method_results)}"
+            )
