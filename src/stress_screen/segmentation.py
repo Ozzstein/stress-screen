@@ -57,10 +57,21 @@ def segment(
     list[Segment]
         Segments ordered by ``start_time_h``.
         Emits a ``warnings.warn`` if no rest segment >= 24 h is found.
+
+    Notes
+    -----
+    The ``Segment.start_row`` / ``end_row`` values index into ``top_df`` after
+    resetting its integer index (i.e., iloc positions, not label-based index
+    values).
     """
-    current: pd.Series = top_df["current"].reset_index(drop=True)
-    time_h: pd.Series = top_df["time_hours"].reset_index(drop=True)
+    df = top_df.reset_index(drop=True)
+    current: pd.Series = df["current"]
+    time_h: pd.Series = df["time_hours"]
     n = len(current)
+
+    if n == 0:
+        warnings.warn("segment(): top_df is empty — no segments produced", stacklevel=2)
+        return []
 
     # ------------------------------------------------------------------
     # Step 1 — assign raw phase with hysteresis
