@@ -11,6 +11,7 @@ run_rest_analysis(rest_cell_df, topology, params) -> dict[int, list[MethodResult
 
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,9 +20,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats as _stats
 from scipy.optimize import OptimizeWarning, curve_fit
+from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult, PackTopology
 from stress_screen.analysis.util import cusum_2sided, ocv_model, robust_z
+from stress_screen._progress import get as _get_progress
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +165,15 @@ def run_rest_analysis(
 
     V_low, V_high = params.voltage_bounds
 
-    for ch in channels:
+    _disable_progress = _get_progress().quiet
+    for ch in tqdm(
+        channels,
+        desc="  M1 (OCV fit)",
+        unit="ch",
+        leave=False,
+        file=sys.stderr,
+        disable=_disable_progress,
+    ):
         d = chan_data[ch]
         if d["n_set"] < params.min_points:
             m1_k[ch] = np.nan

@@ -170,7 +170,15 @@ def main() -> None:
         action="store_true",
         help="Show per-method z-scores",
     )
+    p.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="Suppress progress output to stderr",
+    )
     args = p.parse_args()
+
+    from stress_screen._progress import set_quiet
+    set_quiet(args.quiet)
 
     try:
         _run(args)
@@ -192,6 +200,7 @@ def main() -> None:
 
 def _run(args: argparse.Namespace) -> None:
     """Execute the full pipeline; separated from main() for clean error wrapping."""
+    from stress_screen._progress import get as get_progress
     from stress_screen.loader import load_csv, active_channel_count
     from stress_screen.topology import derive_topology
     from stress_screen.segmentation import segment, rest_segments, charge_segments
@@ -199,6 +208,8 @@ def _run(args: argparse.Namespace) -> None:
     from stress_screen.analysis.li_plating import run_li_plating_analysis
     from stress_screen.analysis.aggregate import aggregate
     from stress_screen.models import AnalysisResult
+
+    prog = get_progress()
 
     csv_path: Path = args.csv.resolve()
 
@@ -208,28 +219,46 @@ def _run(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     # 1. Load CSV
     # ------------------------------------------------------------------
+    prog.stage("Loading CSV...")
     top_df, cell_df = load_csv(csv_path, downsample=args.downsample)
+    n_active = active_channel_count(cell_df)
+    prog.stage(f"Loaded {len(top_df)} rows, {n_active} active channels")
 
     # ------------------------------------------------------------------
     # 2. Derive topology
     # ------------------------------------------------------------------
+    prog.stage("Deriving pack topology...")
     module_count = _extract_module_count(csv_path)
-    n_active = active_channel_count(cell_df)
     topology = derive_topology(
         active_channels=n_active,
         module_count=module_count,
         mapping_file=args.mapping,
     )
+    prog.stage(
+        f"{topology.config_name} "
+        f"({topology.parallel} parallel x {topology.series} series), "
+        f"{topology.module_count} modules"
+    )
 
     # ------------------------------------------------------------------
     # 3. Segment
     # ------------------------------------------------------------------
+    prog.stage("Segmenting charge/discharge/rest phases...")
     with warnings.catch_warnings(record=True) as caught_warnings:
         warnings.simplefilter("always")
         segments = segment(top_df)
 
     for w in caught_warnings:
         print(f"Warning: {w.message}", file=sys.stderr)
+
+    _n_charge = sum(1 for s in segments if s.phase == "charge")
+    _n_discharge = sum(1 for s in segments if s.phase == "discharge")
+    _rs = rest_segments(segments)
+    _longest_rest_h = _rs[0].duration_h if _rs else 0.0
+    prog.stage(
+        f"{_n_charge} charge, {_n_discharge} discharge, "
+        f"{len(_rs)} rest segment(s) (longest rest: {_longest_rest_h:.2f} h)"
+    )
 
     # ------------------------------------------------------------------
     # 4. Slice data for analyses
@@ -263,6 +292,7 @@ def _run(args: argparse.Namespace) -> None:
     v_low, v_high = CHEM_VOLTAGE_BOUNDS[args.chem]
     rest_params = RestParams(voltage_bounds=(v_low, v_high))
 
+    prog.stage(f"Running rest analysis (M1-M6) on {n_active} channels...")
     rest_results = run_rest_analysis(rest_cell_df, topology, params=rest_params)
 
     # ------------------------------------------------------------------
@@ -270,11 +300,13 @@ def _run(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     # For relaxation analysis use only the beginning of the rest window
     li_rest_cell_df = rest_cell_df
+    prog.stage(f"Running Li-plating analysis on {n_active} channels...")
     li_results = run_li_plating_analysis(charge_cell_df, li_rest_cell_df)
 
     # ------------------------------------------------------------------
     # 7. Aggregate into module verdicts
     # ------------------------------------------------------------------
+    prog.stage("Aggregating verdicts...")
     module_verdicts = aggregate(rest_results, li_results, topology)
 
     result = AnalysisResult(
@@ -300,14 +332,18 @@ def _run(args: argparse.Namespace) -> None:
     if not args.no_html:
         from stress_screen.reports.html import write_html_report
         html_path = out_dir / f"{stem}_report.html"
+        prog.stage(f"Writing HTML report -> {html_path}")
         write_html_report(result, rest_cell_df, charge_cell_df, top_df, html_path)
         print(f"HTML report: {html_path}")
 
     if not args.no_pdf:
         from stress_screen.reports.pdf import write_pdf_report
         pdf_path = out_dir / f"{stem}_report.pdf"
+        prog.stage(f"Writing PDF report -> {pdf_path}")
         write_pdf_report(result, rest_cell_df, charge_cell_df, top_df, pdf_path)
         print(f"PDF report:  {pdf_path}")
+
+    prog.stage("Done.")
 
     # ------------------------------------------------------------------
     # 10. Exit code

@@ -22,6 +22,7 @@ run_li_plating_analysis(charge_cell_df, rest_cell_df, params) -> dict[int, Metho
 
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import dataclass
 
@@ -29,9 +30,11 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 from scipy.optimize import OptimizeWarning, curve_fit
+from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult
 from stress_screen.analysis.util import robust_z
+from stress_screen._progress import get as _get_progress
 
 
 # ---------------------------------------------------------------------------
@@ -214,12 +217,21 @@ def run_li_plating_analysis(
         | set(rest_cell_df["channel_index"].unique())
     )
 
+    _disable_progress = _get_progress().quiet
+
     # ------------------------------------------------------------------
     # Sub-method 1: dV/dQ peak prominence sum (charge phase)
     # ------------------------------------------------------------------
     dv_metrics: dict[int, float] = {}
 
-    for ch in channels:
+    for ch in tqdm(
+        channels,
+        desc="  Li-plating (dV/dQ peaks)",
+        unit="ch",
+        leave=False,
+        file=sys.stderr,
+        disable=_disable_progress,
+    ):
         ch_charge = (
             charge_cell_df[charge_cell_df["channel_index"] == ch]
             .sort_values("time_hours")
@@ -238,7 +250,14 @@ def run_li_plating_analysis(
     # ------------------------------------------------------------------
     relax_metrics: dict[int, float] = {}
 
-    for ch in channels:
+    for ch in tqdm(
+        channels,
+        desc="  Li-plating (relaxation fit)",
+        unit="ch",
+        leave=False,
+        file=sys.stderr,
+        disable=_disable_progress,
+    ):
         ch_rest = rest_cell_df[rest_cell_df["channel_index"] == ch].sort_values("time_hours")
         if len(ch_rest) > 0:
             ch_start = ch_rest["time_hours"].min()
