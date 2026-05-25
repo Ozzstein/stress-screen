@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from stress_screen.analysis.util import winsorize_clip
 from stress_screen.models import CellVerdict, MethodResult, ModuleVerdict, PackTopology
 
 
@@ -68,9 +69,12 @@ def aggregate(
         if isc_mr is not None:
             all_z.append(isc_mr.z_score)
 
-        # 2. Compute composite z-score (clip to [0, 5] to prevent outlier domination)
+        # 2. Compute composite z-score
         valid_z = [z for z in all_z if not np.isnan(z)]
-        composite_z = float(np.mean(np.clip(valid_z, 0, 5))) if valid_z else 0.0
+        # Symmetric winsorize to ±8 — preserves both pathological highs and
+        # healthy lows without letting any single outlier dominate.
+        clipped = winsorize_clip(np.asarray(valid_z), low=-8.0, high=8.0)
+        composite_z = float(np.mean(clipped)) if valid_z else 0.0
 
         # 3. Count methods firing HIGH
         n_high = sum(1 for z in valid_z if z >= z_thresh)
