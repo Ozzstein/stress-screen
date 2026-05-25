@@ -136,3 +136,36 @@ def test_m5_uses_arrhenius_helper(monkeypatch):
     assert len(calls) > 0, "M5 must call arrhenius_correction()"
     # Every call must pass the configured Ea
     assert all(abs(c[1] - 0.5) < 1e-9 for c in calls)
+
+
+def test_m3_flags_drifting_cell_over_static_offset():
+    """A cell drifting away from fleet during rest should get higher M3 z than
+    a cell that's just statically offset by the same average distance."""
+    rng = np.random.default_rng(123)
+    n = 8
+    t = np.linspace(0, 10, 600)
+    rows = []
+    for ch in range(n):
+        if ch == 0:
+            # Drifting cell: smooth linear drift away from fleet, LOW noise.
+            # Under NEW M3 the |deviation| has a clear positive slope.
+            V = 3.420 + 0.050 * np.exp(-t / 2.0) - 0.002 * t + rng.normal(0, 1e-4, len(t))
+        elif ch == 1:
+            # Static offset with HIGH wander: large noise around a fixed offset.
+            # Under OLD M3 (static std), this cell has high spread.
+            # Under NEW M3 (divergence slope), the wander averages out → low slope.
+            V = 3.400 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 5e-3, len(t))
+        else:
+            V = 3.420 + (ch - 2) * 0.001 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 1e-4, len(t))
+        T = 25.0 + rng.normal(0, 0.05, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n, 1)
+    results = run_rest_analysis(rest_df, topo)
+    m3_z = {ch: next(mr.z_score for mr in results[ch] if mr.method_name == "M3_spread")
+            for ch in range(n)}
+    assert m3_z[0] > m3_z[1], (
+        f"Drifting ch0 M3 z={m3_z[0]:.3f} must exceed static-offset ch1 M3 z={m3_z[1]:.3f}"
+    )
