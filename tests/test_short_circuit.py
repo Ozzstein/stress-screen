@@ -165,3 +165,66 @@ def test_isc_aggregate_integration():
             assert len(isc_mrs) == 1, (
                 f"{cv.label}: expected exactly 1 isc result, got {len(isc_mrs)}"
             )
+
+
+def test_s1_temperature_confound_does_not_flag_warm_cell():
+    """A cell that runs warmer (but has normal Arrhenius-corrected k) must not be
+    flagged by S1 just because raw k is inflated by temperature."""
+    from stress_screen.analysis.util import arrhenius_correction
+    n = 8
+    rng = np.random.default_rng(0)
+    rows = []
+    t = np.linspace(0, 8.0, 400)
+    # All cells share the *same* underlying corrected leakage; ch3 is just warmer
+    base_k_at_25c = 1e-4
+    for ch in range(n):
+        if ch == 3:
+            # 20K warmer — large enough that the OCV fit can resolve the
+            # Arrhenius-inflated raw k despite voltage-noise / tau fit
+            # crosstalk, so the confound actually emerges in `metadata["k"]`.
+            T = 45.0
+        else:
+            T = 25.0
+        # Raw k expected at this temperature (inverse of correction)
+        c = arrhenius_correction(T_celsius=T, ea_ev=0.5)
+        k_raw = base_k_at_25c / c  # The k that fitting would extract at temp T
+        V = 3.4 + 0.05 * np.exp(-t / 2.0) - k_raw * t + rng.normal(0, 1e-4, len(t))
+        T_arr = T * np.ones(len(t)) + rng.normal(0, 0.05, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T_arr[i]})
+    rest_df = pd.DataFrame(rows)
+
+    from stress_screen.analysis.rest import run_rest_analysis, RestParams
+    from stress_screen.topology import derive_topology
+    topo = derive_topology(n, 1)
+    rest_results = run_rest_analysis(rest_df, topo, params=RestParams(arrhenius_ea_ev=0.5))
+    charge_df = pd.DataFrame(columns=["time_hours", "channel_index", "voltage", "temperature"])
+
+    results = run_isc_analysis(rest_df, rest_results, charge_df)
+    # Scientific guarantee: corrected k should be ~equal across cells regardless
+    # of their measurement temperature. With isc_ea_ev=0.1 (ISC default), the
+    # correction undoes part — not all — of the 20K inflation, but the warm
+    # cell's CORRECTED k must be much closer to peers' than its RAW k.
+    corrected = [results[ch].metadata["s1_k_corrected_isc"] for ch in range(n)]
+    raw = []
+    for ch in range(n):
+        # Pull raw k from rest_results
+        raw.append(rest_results[ch][0].metadata["k"])
+    # Warm cell (ch3) raw k is inflated due to 20K higher temperature;
+    # corrected k must be much closer to peers'.
+    raw_ratio = raw[3] / np.nanmedian([raw[i] for i in range(n) if i != 3])
+    corr_ratio = corrected[3] / np.nanmedian([corrected[i] for i in range(n) if i != 3])
+    assert raw_ratio > 1.5, (
+        f"Sanity check: warm cell raw_ratio={raw_ratio:.2f} should be >1.5 "
+        f"(test setup verifies the confound exists)"
+    )
+    assert corr_ratio < raw_ratio, (
+        f"ISC correction must shrink the warm cell's k disparity: "
+        f"raw_ratio={raw_ratio:.2f}, corrected_ratio={corr_ratio:.2f}"
+    )
+    # The corrected ratio should be markedly closer to 1.0
+    assert abs(corr_ratio - 1.0) < abs(raw_ratio - 1.0) * 0.85, (
+        f"ISC correction must reduce the gap by >15%: "
+        f"raw_ratio={raw_ratio:.2f}, corrected_ratio={corr_ratio:.2f}"
+    )
