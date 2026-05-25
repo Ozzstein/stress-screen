@@ -61,9 +61,6 @@ class LiPlatingParams:
     Resampling before differentiating is the recommended ICA approach —
     it acts as implicit smoothing without distorting peak shapes."""
 
-    peak_prominence_pct: float = 0.05
-    """Minimum peak prominence as fraction of the dQ/dV range."""
-
     T_plating_threshold_c: float = 20.0
     """Charge-mean temperature (°C) above which plating is essentially
     impossible; electrical signatures are gated out above this value."""

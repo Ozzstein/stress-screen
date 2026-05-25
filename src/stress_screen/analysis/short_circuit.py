@@ -36,7 +36,6 @@ class ShortCircuitParams:
     n_q_resample: int = 500
     """Number of uniformly-spaced Q points for S3 dV/dQ resampling.
     Pre-resampling replaces post-gradient Savitzky-Golay smoothing."""
-    peak_prominence_pct: float = 0.05
 
     isc_ea_ev: float = 0.1
     """Activation energy (eV) for ISC-specific temperature correction.
