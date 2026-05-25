@@ -114,3 +114,25 @@ def test_m6_slope_penalises_trending_cell():
         f"Slope term must be raising ch0 M6 z: with_slope={m6_z_ch0:.3f}, "
         f"no_slope={m6_z_ch0_no_slope:.3f}"
     )
+
+
+def test_m5_uses_arrhenius_helper(monkeypatch):
+    """M5 must delegate temperature correction to arrhenius_correction()."""
+    rng = np.random.default_rng(42)
+    rest_df = _make_rest_cell_df(n_channels=8, rng=rng)
+    rest_df["temperature"] = 35.0
+    topo = derive_topology(8, 1)
+
+    calls = []
+    from stress_screen.analysis import rest as rest_module
+    real_helper = rest_module.arrhenius_correction
+
+    def spy(T_celsius, ea_ev):
+        calls.append((T_celsius, ea_ev))
+        return real_helper(T_celsius, ea_ev)
+
+    monkeypatch.setattr(rest_module, "arrhenius_correction", spy)
+    run_rest_analysis(rest_df, topo, params=RestParams(arrhenius_ea_ev=0.5))
+    assert len(calls) > 0, "M5 must call arrhenius_correction()"
+    # Every call must pass the configured Ea
+    assert all(abs(c[1] - 0.5) < 1e-9 for c in calls)

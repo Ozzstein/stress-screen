@@ -23,7 +23,12 @@ from scipy.optimize import OptimizeWarning, curve_fit
 from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult, PackTopology
-from stress_screen.analysis.util import cusum_2sided, ocv_model, robust_z
+from stress_screen.analysis.util import (
+    arrhenius_correction,
+    cusum_2sided,
+    ocv_model,
+    robust_z,
+)
 from stress_screen._progress import get as _get_progress
 
 
@@ -351,14 +356,8 @@ def run_rest_analysis(
 
         m5_T_mean[ch] = T_mean
 
-        if not np.isnan(T_mean):
-            T_K = T_mean + 273.15
-            T_ref_K = 298.15
-            Ea_J = params.arrhenius_ea_ev * 96_485.0  # eV → J/mol
-            correction = np.exp(-Ea_J / 8.314 * (1.0 / T_ref_K - 1.0 / T_K))
-            m5_k_corr[ch] = k_raw * correction
-        else:
-            m5_k_corr[ch] = k_raw
+        correction = arrhenius_correction(T_celsius=T_mean, ea_ev=params.arrhenius_ea_ev)
+        m5_k_corr[ch] = k_raw * correction
 
     k_corr_arr = np.array([m5_k_corr[ch] for ch in channels])
     k_corr_z_arr = robust_z(k_corr_arr)
