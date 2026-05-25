@@ -10,6 +10,15 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
+# OCV relaxation model
+# ---------------------------------------------------------------------------
+
+def ocv_model(t: np.ndarray, V_ocv: float, a: float, tau: float, k: float) -> np.ndarray:
+    """Physical OCV relaxation model: V(t) = V_ocv + a*exp(-t/tau) - k*t."""
+    return V_ocv + a * np.exp(-t / tau) - k * t
+
+
+# ---------------------------------------------------------------------------
 # Robust z-score
 # ---------------------------------------------------------------------------
 

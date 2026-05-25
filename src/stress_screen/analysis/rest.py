@@ -21,7 +21,7 @@ from scipy import stats as _stats
 from scipy.optimize import OptimizeWarning, curve_fit
 
 from stress_screen.models import MethodResult, PackTopology
-from stress_screen.analysis.util import cusum_2sided, robust_z
+from stress_screen.analysis.util import cusum_2sided, ocv_model, robust_z
 
 
 # ---------------------------------------------------------------------------
@@ -49,15 +49,6 @@ class RestParams:
 
     min_points: int = 60
     """Minimum data points required per channel to run analysis."""
-
-
-# ---------------------------------------------------------------------------
-# OCV relaxation model (M1)
-# ---------------------------------------------------------------------------
-
-def ocv_model(t: np.ndarray, V_ocv: float, a: float, tau: float, k: float) -> np.ndarray:
-    """Physical OCV relaxation model: V(t) = V_ocv + a*exp(-t/tau) - k*t."""
-    return V_ocv + a * np.exp(-t / tau) - k * t
 
 
 # ---------------------------------------------------------------------------
@@ -236,19 +227,11 @@ def run_rest_analysis(
         v = d["v_set"]
         temp = d["temp_set"]
 
-        # Compute OCV residuals using M1 fit if available; else linear detrend
+        # Compute OCV residuals using M1 fit if available; else mean-centre.
         if m1_fit_ok.get(ch, False):
             popt = m1_popt[ch]
-            v_model = ocv_model(t, *popt)
-            v_resid = v - v_model
+            v_resid = v - ocv_model(t, *popt)
         else:
-            slope, intercept, *_ = _stats.linregress(t, v)
-            v_resid = v - (slope * t + intercept)
-
-        # OCV residual = voltage - voltage.mean() (as spec says)
-        # But we use the model residual which is the better estimate when M1 fit ok;
-        # fall back to mean-centering when no fit.
-        if not m1_fit_ok.get(ch, False):
             v_resid = v - np.nanmean(v)
 
         valid = ~np.isnan(temp) & ~np.isnan(v_resid)
@@ -466,7 +449,10 @@ def run_rest_analysis(
 
         # M5
         if insufficient or np.isnan(m5_k_corr.get(ch, np.nan)):
-            m5_res = _nan_result("M5_temp_k", {"k_corrected": np.nan, "T_mean": np.nan})
+            m5_res = _nan_result(
+                "M5_temp_k",
+                {"k_corrected": np.nan, "T_mean": np.nan, "temp_correction_applied": False},
+            )
         else:
             z5 = m5_z[ch]
             m5_res = MethodResult(
@@ -476,6 +462,7 @@ def run_rest_analysis(
                 metadata={
                     "k_corrected": m5_k_corr[ch],
                     "T_mean": m5_T_mean[ch],
+                    "temp_correction_applied": not np.isnan(m5_T_mean[ch]),
                 },
             )
 
