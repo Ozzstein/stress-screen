@@ -244,3 +244,37 @@ def test_arrhenius_gate_cold_cell_boosted_vs_mild_cold():
         f"Arrhenius gate should be much higher at 5°C than 15°C: "
         f"gate_5={gate_5:.3f}, gate_15={gate_15:.3f}"
     )
+
+
+def test_protocol_scales_dt_noise_guard():
+    """Same ΔT_late signal that's discarded under 0.2C protocol should be kept
+    under 0.5C protocol (different noise floors)."""
+    from stress_screen.analysis.protocol import ProtocolMetadata
+    charge = _make_charge_df(n_channels=5)
+    # Inject ch0 ΔT_late = 0.4 K (between 0.3 K and 0.6 K)
+    n_per_ch = len(charge[charge["channel_index"] == 0])
+    i_mid_lo = int(np.floor(0.60 * n_per_ch))
+    i_mid_hi = int(np.floor(0.80 * n_per_ch))
+    i_late_lo = int(np.floor(0.80 * n_per_ch))
+    mask_ch0 = charge["channel_index"] == 0
+    ch0_idx = charge[mask_ch0].sort_values("time_hours").index
+    charge.loc[ch0_idx[i_mid_lo:i_mid_hi], "temperature"] = 25.0
+    charge.loc[ch0_idx[i_late_lo:], "temperature"] = 25.4
+    rest = _make_rest_df(n_channels=5)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # Default 0.5C protocol: noise floor 0.3 K → 0.4 K passes
+        normal_protocol = run_li_plating_analysis(
+            charge, rest, params=LiPlatingParams(),
+            protocol=ProtocolMetadata(c_rate=0.5),
+        )
+        # Fast 2.0C protocol: noise floor 0.3 + 0.2*1.5 = 0.6 K → 0.4 K is filtered
+        fast_protocol = run_li_plating_analysis(
+            charge, rest, params=LiPlatingParams(),
+            protocol=ProtocolMetadata(c_rate=2.0),
+        )
+    assert not np.isnan(normal_protocol[0].metadata["heat_z"]), \
+        "0.5C protocol: 0.4 K ΔT must pass 0.3 K noise floor → finite heat_z"
+    assert np.isnan(fast_protocol[0].metadata["heat_z"]), \
+        "2.0C protocol: 0.4 K ΔT below 0.6 K floor → heat_z must be nan"

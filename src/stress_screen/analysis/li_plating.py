@@ -35,6 +35,7 @@ from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult
 from stress_screen.analysis.util import arrhenius_correction, robust_z
+from stress_screen.analysis.protocol import ProtocolMetadata
 from stress_screen._progress import get as _get_progress
 
 
@@ -208,6 +209,7 @@ def run_li_plating_analysis(
     params: LiPlatingParams | None = None,
     top_charge_df: pd.DataFrame | None = None,
     n_parallel: int = 1,
+    protocol: ProtocolMetadata | None = None,
 ) -> dict[int, MethodResult]:
     """Detect Li-plating signatures.
 
@@ -229,6 +231,8 @@ def run_li_plating_analysis(
     """
     if params is None:
         params = LiPlatingParams()
+    if protocol is None:
+        protocol = ProtocolMetadata()
 
     # Build pack-level Q axis from charge current when available
     q_pack_time: np.ndarray | None = None
@@ -292,7 +296,7 @@ def run_li_plating_analysis(
                 ch_charge["voltage"].values,
                 q_axis=q_ch,
                 dv_step=params.dv_step_v,
-                peak_prominence_pct=params.peak_prominence_pct,
+                peak_prominence_pct=protocol.dqdv_prominence_pct(),
             )
 
     # ------------------------------------------------------------------
@@ -385,7 +389,8 @@ def run_li_plating_analysis(
             dT_late_metrics[ch] = np.nan
         else:
             dt_late = T_late_mean - T_mid_mean
-            dT_late_metrics[ch] = dt_late if abs(dt_late) >= 0.3 else np.nan
+            noise_floor = protocol.dt_late_noise_floor_k()
+            dT_late_metrics[ch] = dt_late if abs(dt_late) >= noise_floor else np.nan
 
     # ------------------------------------------------------------------
     # Compute robust z-scores for each sub-method
