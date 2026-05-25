@@ -236,6 +236,13 @@ def run_li_plating_analysis(
             [0.0],
             cumulative_trapezoid(np.abs(_top["current"].values), q_pack_time),
         ]) / max(n_parallel, 1)
+    else:  # len == 1
+        warnings.warn(
+            "run_li_plating_analysis: top_charge_df has fewer than 2 rows; dV/dQ computed vs "
+            "sample index (physically incorrect). Pass a valid top_charge_df for Q-domain analysis.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     channels = sorted(
         set(charge_cell_df["channel_index"].unique())

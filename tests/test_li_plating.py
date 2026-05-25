@@ -150,3 +150,28 @@ def test_dt_late_noise_guard():
             f"ch{ch}: expected heat_z=nan for |dT_late|<0.3°C, "
             f"got heat_z={results[ch].metadata['heat_z']}"
         )
+
+
+def test_dt_late_noise_guard_positive_case():
+    """dT_late = 0.5°C (>= 0.3°C guard) should produce finite heat_z for that channel."""
+    import warnings
+    charge = _make_charge_df(n_channels=5)
+    n_per_ch = len(charge[charge["channel_index"] == 0])
+    i_mid_lo = int(np.floor(0.60 * n_per_ch))
+    i_mid_hi = int(np.floor(0.80 * n_per_ch))
+    i_late_lo = int(np.floor(0.80 * n_per_ch))
+
+    # Set channel 0: mid window = 25°C, late window = 25.5°C → dT_late = 0.5°C
+    mask_ch0 = charge["channel_index"] == 0
+    ch0_sorted_idx = charge[mask_ch0].sort_values("time_hours").index
+    charge.loc[ch0_sorted_idx[i_mid_lo:i_mid_hi], "temperature"] = 25.0
+    charge.loc[ch0_sorted_idx[i_late_lo:], "temperature"] = 25.5
+
+    rest = _make_rest_df(n_channels=5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+
+    assert not np.isnan(results[0].metadata["heat_z"]), (
+        "ch0: dT_late=0.5°C (>= 0.3°C guard) should produce finite heat_z"
+    )
