@@ -55,11 +55,14 @@ def load_csv(
     """
     filepath = Path(filepath)
 
+    if not isinstance(downsample, int) or downsample < 1:
+        raise ValueError(f"downsample must be a positive integer, got {downsample!r}")
+
     # ------------------------------------------------------------------
     # 1. Count leading comment lines (#) so we can skip them.
     # ------------------------------------------------------------------
     skip_rows = 0
-    with open(filepath, "r") as fh:
+    with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
             if line.startswith("#"):
                 skip_rows += 1
@@ -84,6 +87,7 @@ def load_csv(
         index_col=False,
         skipinitialspace=True,
         engine="python",
+        encoding="utf-8",
     )
 
     # Strip whitespace from column names (some have trailing spaces in file)
@@ -91,6 +95,11 @@ def load_csv(
 
     # Drop fully-empty trailing columns (artifact of trailing semicolons)
     df = df.dropna(axis=1, how="all")
+
+    REQUIRED_COLS = {"Current", "Voltage", "SOC %", "Warning", "Fault"}
+    missing = REQUIRED_COLS - set(df.columns)
+    if missing:
+        raise ValueError(f"CSV missing required columns: {sorted(missing)}")
 
     # ------------------------------------------------------------------
     # 3. Optional downsampling
@@ -149,31 +158,47 @@ def load_csv(
     # ------------------------------------------------------------------
     # 8. Build cell_df (long format, active channels only)
     #    channel_index is 0-based (cell_number - 1)
+    #    Vectorised melt avoids a Python loop over channels.
     # ------------------------------------------------------------------
-    frames: list[pd.DataFrame] = []
-    for cell_num in active_cell_numbers:
-        voltage_v = (
-            pd.to_numeric(df[volt_cols[cell_num]], errors="coerce") / 1000.0
-        ).values
+    if active_cell_numbers:
+        volt_cols_active = [volt_cols[n] for n in active_cell_numbers]
+        # Channels that have a temperature column; others fill with NaN
+        temp_cols_active = [
+            temp_cols[n] if n in temp_cols else None
+            for n in active_cell_numbers
+        ]
 
-        if cell_num in temp_cols:
-            temp = pd.to_numeric(
-                df[temp_cols[cell_num]], errors="coerce"
-            ).values.astype(float)
-            # 0.0 means "no sensor connected" → NaN
-            temp[temp == 0.0] = np.nan
-        else:
-            temp = np.full(len(df), np.nan)
+        # Convert voltages: to_numeric + /1000 in one pass; columns → 0-based index
+        volt_wide = df[volt_cols_active].apply(pd.to_numeric, errors="coerce") / 1000.0
+        volt_wide.columns = pd.Index([n - 1 for n in active_cell_numbers])
 
-        frames.append(pd.DataFrame({
-            "time_hours":    time_hours.values,
-            "channel_index": cell_num - 1,      # 0-based
-            "voltage":       voltage_v,
-            "temperature":   temp,
-        }))
+        # Build temperature wide frame, substituting NaN columns where needed
+        temp_frames: dict[int, pd.Series] = {}
+        for n, tcol in zip(active_cell_numbers, temp_cols_active):
+            if tcol is not None:
+                s = pd.to_numeric(df[tcol], errors="coerce")
+                s = s.replace(0.0, np.nan)
+            else:
+                s = pd.Series(np.nan, index=df.index)
+            temp_frames[n - 1] = s  # key is 0-based channel index
+        temp_wide = pd.DataFrame(temp_frames)
 
-    if frames:
-        cell_df = pd.concat(frames, ignore_index=True)
+        # Melt both to long form, aligned by integer position
+        volt_long = volt_wide.melt(
+            var_name="channel_index", value_name="voltage", ignore_index=False
+        )
+        temp_long = temp_wide.melt(
+            var_name="channel_index", value_name="temperature", ignore_index=False
+        )
+
+        cell_df = volt_long.copy()
+        cell_df["temperature"] = temp_long["temperature"].values
+        # Attach time_hours via the original row index (before melt expanded it)
+        cell_df["time_hours"] = np.tile(time_hours.values, len(active_cell_numbers))
+        cell_df = cell_df.reset_index(drop=True)[
+            ["time_hours", "channel_index", "voltage", "temperature"]
+        ]
+        cell_df["channel_index"] = cell_df["channel_index"].astype(np.int16)
     else:
         # No active channels — return empty but correctly-typed DataFrame
         cell_df = pd.DataFrame(columns=[
@@ -219,21 +244,11 @@ def _parse_time_to_hours(time_series: pd.Series) -> pd.Series:
     first = time_series.dropna().iloc[0]
 
     if "_" in first:
-        # Try DD_MM_YY_HH_MM_SS first (day-first, used by the real tester).
-        # Fall back to YY_MM_DD_HH_MM_SS if the day-first parse fails.
+        # tester output uses DD_MM_YY; fall back to YY_MM_DD for older firmware
         try:
-            parsed_dmy = pd.to_datetime(time_series, format="%d_%m_%y_%H_%M_%S")
-            parsed_ymd = pd.to_datetime(time_series, format="%y_%m_%d_%H_%M_%S")
-            # Pick whichever gives a shorter (more plausible) time span
-            span_dmy = (parsed_dmy.iloc[-1] - parsed_dmy.iloc[0]).total_seconds()
-            span_ymd = (parsed_ymd.iloc[-1] - parsed_ymd.iloc[0]).total_seconds()
-            parsed = parsed_dmy if span_dmy <= span_ymd else parsed_ymd
-        except Exception:
-            # If one format fails entirely, fall back to the other
-            try:
-                parsed = pd.to_datetime(time_series, format="%d_%m_%y_%H_%M_%S")
-            except Exception:
-                parsed = pd.to_datetime(time_series, format="%y_%m_%d_%H_%M_%S")
+            parsed = pd.to_datetime(time_series, format="%d_%m_%y_%H_%M_%S")
+        except (ValueError, Exception):
+            parsed = pd.to_datetime(time_series, format="%y_%m_%d_%H_%M_%S")
         elapsed = (parsed - parsed.iloc[0]).dt.total_seconds() / 3600.0
     else:
         # HH:MM:SS → seconds since midnight, then handle midnight rollover
@@ -248,7 +263,7 @@ def _parse_time_to_hours(time_series: pd.Series) -> pd.Series:
         arr = seconds.values.copy()
         offset = 0.0
         for i in range(1, len(arr)):
-            if arr[i] + offset < arr[i - 1] + offset:
+            if arr[i] + offset < arr[i - 1]:
                 offset += 86400.0
             arr[i] += offset
 
