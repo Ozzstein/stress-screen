@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from scipy import signal
+from scipy.integrate import cumulative_trapezoid
 from scipy.optimize import OptimizeWarning, curve_fit
 from tqdm.auto import tqdm
 
@@ -60,7 +61,7 @@ class LiPlatingParams:
     peak_prominence_pct: float = 0.05
     """Minimum peak prominence as fraction of the dV/dQ range."""
 
-    T_plating_threshold_c: float = 15.0
+    T_plating_threshold_c: float = 20.0
     """Charge-mean temperature (°C) above which plating is essentially
     impossible; electrical signatures are gated out above this value."""
 
@@ -96,16 +97,20 @@ def _compute_dvdq_peak_sum(
     voltage: np.ndarray,
     smooth_window: int,
     peak_prominence_pct: float,
+    q_axis: np.ndarray | None = None,
 ) -> float:
     """Return the sum of peak prominences in the smoothed dV/dQ signal.
 
-    Uses voltage gradient w.r.t. index for relative comparison across cells
-    (all cells share the same time resolution).
+    Uses voltage gradient w.r.t. q_axis when provided (physically correct
+    Q-domain), otherwise falls back to gradient w.r.t. sample index.
     """
     if len(voltage) < 3:
         return 0.0
 
-    dv_dq = np.gradient(voltage)
+    if q_axis is not None:
+        dv_dq = np.gradient(voltage, q_axis)
+    else:
+        dv_dq = np.gradient(voltage)
 
     # Apply Savitzky-Golay smoothing if we have enough points
     if len(dv_dq) >= smooth_window:
@@ -190,6 +195,8 @@ def run_li_plating_analysis(
     charge_cell_df: pd.DataFrame,
     rest_cell_df: pd.DataFrame,
     params: LiPlatingParams | None = None,
+    top_charge_df: pd.DataFrame | None = None,
+    n_parallel: int = 1,
 ) -> dict[int, MethodResult]:
     """Detect Li-plating signatures.
 
@@ -211,6 +218,24 @@ def run_li_plating_analysis(
     """
     if params is None:
         params = LiPlatingParams()
+
+    # Build pack-level Q axis from charge current when available
+    q_pack_time: np.ndarray | None = None
+    q_pack_cumul: np.ndarray | None = None
+    if top_charge_df is None:
+        warnings.warn(
+            "run_li_plating_analysis: top_charge_df not provided; dV/dQ computed vs "
+            "sample index (physically incorrect). Pass top_charge_df for Q-domain analysis.",
+            UserWarning,
+            stacklevel=2,
+        )
+    elif len(top_charge_df) >= 2:
+        _top = top_charge_df.sort_values("time_hours")
+        q_pack_time = _top["time_hours"].values
+        q_pack_cumul = np.concatenate([
+            [0.0],
+            cumulative_trapezoid(np.abs(_top["current"].values), q_pack_time),
+        ]) / max(n_parallel, 1)
 
     channels = sorted(
         set(charge_cell_df["channel_index"].unique())
@@ -239,10 +264,16 @@ def run_li_plating_analysis(
         if len(ch_charge) < params.min_charge_points:
             dv_metrics[ch] = np.nan
         else:
+            q_ch: np.ndarray | None = None
+            if q_pack_time is not None:
+                q_ch = np.interp(
+                    ch_charge["time_hours"].values, q_pack_time, q_pack_cumul
+                )
             dv_metrics[ch] = _compute_dvdq_peak_sum(
                 ch_charge["voltage"].values,
                 smooth_window=params.dv_smooth_window,
                 peak_prominence_pct=params.peak_prominence_pct,
+                q_axis=q_ch,
             )
 
     # ------------------------------------------------------------------
@@ -334,7 +365,8 @@ def run_li_plating_analysis(
         if np.isnan(T_mid_mean) or np.isnan(T_late_mean):
             dT_late_metrics[ch] = np.nan
         else:
-            dT_late_metrics[ch] = T_late_mean - T_mid_mean
+            dt_late = T_late_mean - T_mid_mean
+            dT_late_metrics[ch] = dt_late if abs(dt_late) >= 0.3 else np.nan
 
     # ------------------------------------------------------------------
     # Compute robust z-scores for each sub-method

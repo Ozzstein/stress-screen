@@ -77,3 +77,76 @@ def test_injected_cell_has_higher_dv_dq():
     # Channel 0 has an injected peak, should have higher dv_dq_z than the median
     assert ch0_dv_z > float(np.nanmedian(other_dv_z)), \
         f"Expected ch0 dv_dq_z={ch0_dv_z:.3f} > median others {np.nanmedian(other_dv_z):.3f}"
+
+
+import warnings
+
+
+def _make_top_charge_df(n_points=200, current=5.0):
+    t = np.linspace(0, 2.0, n_points)
+    return pd.DataFrame({"time_hours": t, "current": np.full(n_points, current)})
+
+
+def test_dvdq_uses_q_domain():
+    """Peak prominence sum must differ between Q-domain and index-domain calls."""
+    charge = _make_charge_df(n_channels=5)
+    rest = _make_rest_df(n_channels=5)
+    top_charge = _make_top_charge_df(current=5.0)  # dq ≈ 0.05 Ah/sample → ~20× scale factor
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results_idx = run_li_plating_analysis(charge, rest)
+    results_q = run_li_plating_analysis(charge, rest, top_charge_df=top_charge, n_parallel=1)
+
+    # Channel 0 has an injected bump → non-zero prominence in both calls
+    idx_sum = results_idx[0].metadata["peak_prominence_sum"]
+    q_sum = results_q[0].metadata["peak_prominence_sum"]
+    assert idx_sum > 0, "Injected peak on ch0 should give non-zero index-based prominence"
+    assert abs(q_sum - idx_sum) / (idx_sum + 1e-10) > 0.01, (
+        f"Q-domain prominence {q_sum:.6f} too similar to index-based {idx_sum:.6f}"
+    )
+
+
+def test_dvdq_fallback_no_top_df():
+    """Omitting top_charge_df issues a warning but returns normally."""
+    charge = _make_charge_df()
+    rest = _make_rest_df()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        results = run_li_plating_analysis(charge, rest)
+    assert len(results) == 5
+    messages = " ".join(str(w.message) for w in caught).lower()
+    assert "index" in messages or "top_charge_df" in messages, (
+        f"Expected Q-domain fallback warning, got: {[str(w.message) for w in caught]}"
+    )
+
+
+def test_t_threshold_20c():
+    """Default T_plating_threshold_c=20°C: 19°C cell gate ≥0.05; 21°C cell gate=0."""
+    charge = _make_charge_df(n_channels=4)
+    rest = _make_rest_df(n_channels=4)
+    charge.loc[charge["channel_index"] == 0, "temperature"] = 19.0
+    charge.loc[charge["channel_index"] == 1, "temperature"] = 21.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+    assert results[0].metadata["temperature_gate"] >= 0.05, (
+        f"19°C cell gate={results[0].metadata['temperature_gate']:.4f} must be ≥0.05 with 20°C threshold"
+    )
+    assert results[1].metadata["temperature_gate"] == 0.0, (
+        f"21°C cell gate={results[1].metadata['temperature_gate']:.4f} must be 0.0"
+    )
+
+
+def test_dt_late_noise_guard():
+    """dT_late < 0.3°C should produce heat_z = nan (sub-noise signal discarded)."""
+    charge = _make_charge_df(n_channels=5)  # uniform T=25°C → dT_late=0.0 for all
+    rest = _make_rest_df(n_channels=5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+    for ch in range(5):
+        assert np.isnan(results[ch].metadata["heat_z"]), (
+            f"ch{ch}: expected heat_z=nan for |dT_late|<0.3°C, "
+            f"got heat_z={results[ch].metadata['heat_z']}"
+        )
