@@ -61,6 +61,10 @@ def test_m5_arrhenius_vs_linear():
             f"ch{ch}: Arrhenius {k_corr:.8f} vs linear {k_linear:.8f} — "
             f"difference {100 * abs(k_corr - k_linear) / k_linear:.2f}% must be >1%"
         )
+        # At T > T_ref, Arrhenius normalisation reduces k toward 25°C baseline
+        assert k_corr < k_raw, (
+            f"ch{ch}: k_corr={k_corr:.8f} should be < k_raw={k_raw:.8f} at 35°C (above T_ref=25°C)"
+        )
         checked = True
         break
 
@@ -100,4 +104,13 @@ def test_m6_slope_penalises_trending_cell():
     assert m6_z_ch0 > float(np.nanmedian(m6_z_stable)) + 0.5, (
         f"Trending ch0 M6 z={m6_z_ch0:.3f} should be > stable median "
         f"{np.nanmedian(m6_z_stable):.3f} + 0.5"
+    )
+
+    # Verify the slope term is actually contributing — disable it and check ch0 z drops
+    from stress_screen.analysis.rest import RestParams
+    results_no_slope = run_rest_analysis(rest_df, topo, params=RestParams(m6_slope_weight=0.0))
+    m6_z_ch0_no_slope = next(mr.z_score for mr in results_no_slope[0] if mr.method_name == "M6_rank")
+    assert m6_z_ch0 > m6_z_ch0_no_slope, (
+        f"Slope term must be raising ch0 M6 z: with_slope={m6_z_ch0:.3f}, "
+        f"no_slope={m6_z_ch0_no_slope:.3f}"
     )
