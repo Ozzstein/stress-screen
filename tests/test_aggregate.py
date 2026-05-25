@@ -51,3 +51,59 @@ def test_composite_does_not_clip_healthy_negative_z_to_zero():
     assert ch0_cv.composite_z < 0.0, (
         f"All-negative-z cell should have negative composite_z; got {ch0_cv.composite_z}"
     )
+
+
+def test_composite_weights_methods_by_confidence():
+    """Methods that publish a `confidence` metadata field should be weighted
+    accordingly. A high-confidence z=4 should dominate low-confidence z=0s."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        # ch0: M1 publishes confidence=1.0 with z=4 (catastrophic, trusted);
+        # other methods publish confidence=0.1 with z=0 (noisy, untrusted).
+        # Other channels: all zeros, all confidence=1.0.
+        if ch == 0:
+            m1 = MethodResult("M1", 4.0, "NORMAL", metadata={"confidence": 1.0})
+            others = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={"confidence": 0.1})
+                for i in range(1, 6)
+            ]
+            rest_results[ch] = [m1] + others
+            li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL",
+                                          metadata={"confidence": 0.1})
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={"confidence": 1.0})
+                for i in range(6)
+            ]
+            li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL",
+                                          metadata={"confidence": 1.0})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    # Weighted mean ch0: (4*1.0 + 0*0.1*6) / (1.0 + 6*0.1) = 4/1.6 = 2.5
+    # Unweighted (broken) would give: 4/7 ≈ 0.57
+    assert ch0_cv.composite_z > 2.0, (
+        f"High-confidence z=4 should dominate; got composite_z={ch0_cv.composite_z:.3f}. "
+        f"Unweighted would give 0.57; weighted should give ~2.5."
+    )
+
+
+def test_composite_default_confidence_is_unity():
+    """When no method publishes 'confidence' metadata, the composite should
+    match the unweighted (winsorized) mean — backward-compatible behaviour."""
+    n = 8
+    z_map = {ch: [0.0] * 7 for ch in range(n)}
+    z_map[0] = [3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    rest_r, li_r = _build_inputs(z_map)  # no 'confidence' key
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_r, li_r, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    # Unweighted mean of 1 method at z=3 + 6 at z=0 = 3/7 ≈ 0.43
+    # With default confidence=1.0, weighted result is identical.
+    assert abs(ch0_cv.composite_z - 3.0/7.0) < 0.01, (
+        f"Default confidence=1.0 must give unweighted mean; got {ch0_cv.composite_z:.3f}, "
+        f"expected {3.0/7.0:.3f}"
+    )

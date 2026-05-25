@@ -65,16 +65,34 @@ def aggregate(
     for ch in all_channels:
         # 1. Collect all z-scores (6 rest + 1 li_plating + optional 1 isc)
         isc_mr = isc_results.get(ch) if isc_results is not None else None
-        all_z = [mr.z_score for mr in rest_results[ch]] + [li_plating_results[ch].z_score]
-        if isc_mr is not None:
-            all_z.append(isc_mr.z_score)
 
-        # 2. Compute composite z-score
-        valid_z = [z for z in all_z if not np.isnan(z)]
-        # Symmetric winsorize to ±8 — preserves both pathological highs and
-        # healthy lows without letting any single outlier dominate.
-        clipped = winsorize_clip(np.asarray(valid_z), low=-8.0, high=8.0)
-        composite_z = float(np.mean(clipped)) if valid_z else 0.0
+        # 2. Confidence-weighted composite z-score.
+        # Each MethodResult may publish metadata["confidence"] in [0, 1]; when
+        # absent, confidence defaults to 1.0 — preserving the legacy unweighted
+        # behaviour. Methods with confidence <= 0 are dropped.
+        method_results_for_aggregation = (
+            rest_results[ch] + [li_plating_results[ch]] +
+            ([isc_mr] if isc_mr is not None else [])
+        )
+        z_with_conf: list[tuple[float, float]] = []
+        for mr in method_results_for_aggregation:
+            if np.isnan(mr.z_score):
+                continue
+            conf = float(mr.metadata.get("confidence", 1.0))
+            if conf <= 0.0:
+                continue
+            z_with_conf.append((mr.z_score, conf))
+
+        if z_with_conf:
+            zs = np.array([z for z, _ in z_with_conf])
+            ws = np.array([w for _, w in z_with_conf])
+            clipped_z = winsorize_clip(zs, low=-8.0, high=8.0)
+            composite_z = float(np.sum(clipped_z * ws) / np.sum(ws))
+        else:
+            composite_z = 0.0
+
+        # valid_z used by the n_high count below — same set of z's
+        valid_z = [z for z, _ in z_with_conf]
 
         # 3. Count methods firing HIGH
         n_high = sum(1 for z in valid_z if z >= z_thresh)
