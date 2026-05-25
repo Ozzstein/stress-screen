@@ -16,12 +16,9 @@ venv/
 env/
 
 # PyInstaller
-dist/
-build/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # Data files
 *.csv

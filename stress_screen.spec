@@ -11,25 +11,23 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import sys, os
 
-block_cipher = None
+datas = [('configs/temp_mapping.yaml', 'configs')]
+templates_dir = os.path.join(os.path.dirname(os.path.abspath('__file__')), 'src', 'stress_screen', 'reports', 'templates')
+if os.path.isdir(templates_dir):
+    datas.append((templates_dir, 'reports/templates'))
 
 a = Analysis(
     ['src/stress_screen/__main__.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('configs/temp_mapping.yaml', 'configs'),
-        ('src/stress_screen/reports/templates', 'stress_screen/reports/templates'),
-        # Add kaleido binaries here when needed (see comment above)
-    ],
+    datas=datas,
     hiddenimports=collect_submodules('stress_screen'),
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
-    cipher=block_cipher,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
