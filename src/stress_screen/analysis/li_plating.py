@@ -34,7 +34,7 @@ from scipy.optimize import OptimizeWarning, curve_fit
 from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult
-from stress_screen.analysis.util import robust_z
+from stress_screen.analysis.util import arrhenius_correction, robust_z
 from stress_screen._progress import get as _get_progress
 
 
@@ -70,6 +70,13 @@ class LiPlatingParams:
     T_default_gate: float = 0.5
     """Gate value used when temperature data is missing for a channel
     (mid-risk — neither fully trust nor fully gate)."""
+
+    gate_ea_ev: float = 0.55
+    """Activation energy (eV) for the Arrhenius plating-likelihood gate.
+    Plating is suppressed at warm temperatures via this Ea; default 0.55 eV
+    is roughly Li-intercalation kinetics for LFP (literature range
+    0.5–0.6 eV; chosen so a +10 K excursion above threshold suppresses the
+    gate to <0.5)."""
 
 
 # ---------------------------------------------------------------------------
@@ -401,14 +408,19 @@ def run_li_plating_analysis(
     # ------------------------------------------------------------------
     # Cold-temperature gating for electrical signatures
     # ------------------------------------------------------------------
+    # Arrhenius temperature gate: anchor gate=1.0 at the threshold temperature.
+    # Plating kinetics ∝ exp(Ea/k_B * (1/T - 1/T_thr)), so the gate is the
+    # ratio of Arrhenius corrections at T vs the threshold temperature.
     T_thr = params.T_plating_threshold_c
+    gate_at_thr = arrhenius_correction(T_celsius=T_thr, ea_ev=params.gate_ea_ev)
     gates: list[float] = []
     for T_mean in T_mean_arr:
         if np.isnan(T_mean):
             gate = params.T_default_gate
         else:
-            gate = max(0.0, T_thr - float(T_mean)) / T_thr
-            gate = min(1.5, gate)
+            ratio = arrhenius_correction(T_celsius=float(T_mean), ea_ev=params.gate_ea_ev) / gate_at_thr
+            # Cap the boost so a very cold cell doesn't dominate (max 3x)
+            gate = float(min(3.0, ratio))
         gates.append(gate)
 
     # ------------------------------------------------------------------

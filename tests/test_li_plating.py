@@ -149,20 +149,21 @@ def test_dvdq_fallback_no_top_df():
 
 
 def test_t_threshold_20c():
-    """Default T_plating_threshold_c=20°C: 19°C cell gate ≥0.05; 21°C cell gate=0."""
+    """Default T_plating_threshold_c=20°C anchors gate=1.0; 19°C slightly higher,
+    21°C slightly lower; warm cell (30°C) gate is heavily suppressed."""
     charge = _make_charge_df(n_channels=4)
     rest = _make_rest_df(n_channels=4)
     charge.loc[charge["channel_index"] == 0, "temperature"] = 19.0
     charge.loc[charge["channel_index"] == 1, "temperature"] = 21.0
+    charge.loc[charge["channel_index"] == 2, "temperature"] = 30.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         results = run_li_plating_analysis(charge, rest)
-    assert results[0].metadata["temperature_gate"] >= 0.05, (
-        f"19°C cell gate={results[0].metadata['temperature_gate']:.4f} must be ≥0.05 with 20°C threshold"
-    )
-    assert results[1].metadata["temperature_gate"] == 0.0, (
-        f"21°C cell gate={results[1].metadata['temperature_gate']:.4f} must be 0.0"
-    )
+    g19 = results[0].metadata["temperature_gate"]
+    g21 = results[1].metadata["temperature_gate"]
+    g30 = results[2].metadata["temperature_gate"]
+    assert g19 > g21, f"19°C gate {g19:.4f} should exceed 21°C gate {g21:.4f}"
+    assert g30 < 0.5, f"30°C gate {g30:.4f} should be heavily suppressed (<0.5)"
 
 
 def test_dt_late_noise_guard():
@@ -201,4 +202,45 @@ def test_dt_late_noise_guard_positive_case():
 
     assert not np.isnan(results[0].metadata["heat_z"]), (
         "ch0: dT_late=0.5°C (>= 0.3°C guard) should produce finite heat_z"
+    )
+
+
+def test_arrhenius_gate_at_threshold_is_unity():
+    """At the plating threshold temperature (default 20°C), gate must equal 1.0."""
+    charge = _make_charge_df(n_channels=3)
+    rest = _make_rest_df(n_channels=3)
+    charge.loc[charge["channel_index"] == 0, "temperature"] = 20.0  # exactly threshold
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+    gate = results[0].metadata["temperature_gate"]
+    assert abs(gate - 1.0) < 1e-6, f"Gate at threshold expected 1.0, got {gate:.6f}"
+
+
+def test_arrhenius_gate_above_threshold_is_suppressed():
+    """Cells warmer than threshold by >5K should have gate substantially <1."""
+    charge = _make_charge_df(n_channels=3)
+    rest = _make_rest_df(n_channels=3)
+    charge.loc[charge["channel_index"] == 0, "temperature"] = 30.0  # 10°C above
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+    gate = results[0].metadata["temperature_gate"]
+    assert gate < 0.5, f"Gate >5K above threshold expected <0.5, got {gate:.4f}"
+
+
+def test_arrhenius_gate_cold_cell_boosted_vs_mild_cold():
+    """Cold cell (5°C, 15K below threshold) should produce gate > 2x the gate at 15°C."""
+    charge = _make_charge_df(n_channels=3)
+    rest = _make_rest_df(n_channels=3)
+    charge.loc[charge["channel_index"] == 0, "temperature"] = 5.0
+    charge.loc[charge["channel_index"] == 1, "temperature"] = 15.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        results = run_li_plating_analysis(charge, rest)
+    gate_5 = results[0].metadata["temperature_gate"]
+    gate_15 = results[1].metadata["temperature_gate"]
+    assert gate_5 > 2.0 * gate_15, (
+        f"Arrhenius gate should be much higher at 5°C than 15°C: "
+        f"gate_5={gate_5:.3f}, gate_15={gate_15:.3f}"
     )
