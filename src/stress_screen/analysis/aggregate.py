@@ -128,7 +128,13 @@ def aggregate(
         cells.sort(key=lambda cv: cv.group_in_module)
 
         flagged_cells = [cv for cv in cells if cv.verdict == "HIGH"]
-        verdict = "NOK" if flagged_cells else "OK"
+        elevated_cells = [cv for cv in cells if cv.verdict == "ELEVATED"]
+        if flagged_cells:
+            verdict = "NOK"
+        elif elevated_cells:
+            verdict = "MARGINAL"
+        else:
+            verdict = "OK"
 
         module_verdicts.append(
             ModuleVerdict(

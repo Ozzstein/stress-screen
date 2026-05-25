@@ -137,7 +137,7 @@ class ModuleVerdict:
     """Pass/fail verdict for an entire module."""
 
     module_id: int
-    verdict: Literal["OK", "NOK"]
+    verdict: Literal["OK", "MARGINAL", "NOK"]
     flagged_cells: list[CellVerdict]   # only HIGH cells
     all_cells: list[CellVerdict]
 
@@ -147,10 +147,17 @@ class ModuleVerdict:
 
         Examples::
             "M3: OK"
+            "M3: MARGINAL  [cells elevated: M3/G2 (ELEVATED)]"
             "M3: NOK  [cells flagged: M3/G5 (HIGH), M3/G7 (HIGH)]"
         """
         if self.verdict == "OK":
             return f"M{self.module_id}: OK"
+        if self.verdict == "MARGINAL":
+            elevated = [c for c in self.all_cells if c.verdict == "ELEVATED"]
+            if not elevated:
+                return f"M{self.module_id}: MARGINAL  [no elevated cells recorded]"
+            elevated_labels = ", ".join(f"{c.label} ({c.verdict})" for c in elevated)
+            return f"M{self.module_id}: MARGINAL  [cells elevated: {elevated_labels}]"
         if not self.flagged_cells:
             return f"M{self.module_id}: NOK  [no flagged cells recorded]"
         flagged_labels = ", ".join(f"{c.label} ({c.verdict})" for c in self.flagged_cells)

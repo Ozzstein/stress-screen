@@ -107,3 +107,73 @@ def test_composite_default_confidence_is_unity():
         f"Default confidence=1.0 must give unweighted mean; got {ch0_cv.composite_z:.3f}, "
         f"expected {3.0/7.0:.3f}"
     )
+
+
+def test_module_marginal_verdict_for_elevated_only_real():
+    """A module with at least one ELEVATED cell (composite_z > 1.0, no method >= 2.0)
+    and no HIGH cells should be MARGINAL."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            # 4 rest methods at z=1.9 (each < 2.0 → n_high=0), 2 at z=0, 1 li at 0
+            # composite_z = (1.9*4 + 0*3) / 7 ≈ 1.086 > 1.0 → ELEVATED
+            mrs = [
+                MethodResult("M1", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M2", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M3", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M4", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+            rest_results[ch] = mrs
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.verdict == "ELEVATED", (
+        f"Setup sanity: ch0 should be ELEVATED. Got {ch0_cv.verdict}, composite_z={ch0_cv.composite_z:.3f}"
+    )
+    assert verdicts[0].verdict == "MARGINAL", (
+        f"Module with one ELEVATED cell expected MARGINAL, got {verdicts[0].verdict}"
+    )
+
+
+def test_module_nok_overrides_marginal_when_any_high():
+    """Any HIGH cell still produces NOK regardless of how many MARGINAL cells."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            # Two methods at z=3 → composite > 2 → HIGH
+            rest_results[ch] = [
+                MethodResult("M1", 3.0, "HIGH", metadata={}),
+                MethodResult("M2", 3.0, "HIGH", metadata={}),
+            ] + [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(2, 6)
+            ]
+        elif ch == 1:
+            rest_results[ch] = [
+                MethodResult("M1", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M2", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M3", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M4", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    assert verdicts[0].verdict == "NOK", f"Expected NOK with HIGH cell, got {verdicts[0].verdict}"

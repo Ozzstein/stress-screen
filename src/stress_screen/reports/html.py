@@ -129,7 +129,12 @@ def write_html_report(
         f"{topo.active_channels} active cell-groups"
     )
     report_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    overall_verdict = "NOK" if result.any_nok else "OK"
+    if result.any_nok:
+        overall_verdict = "NOK"
+    elif any(m.verdict == "MARGINAL" for m in result.module_verdicts):
+        overall_verdict = "MARGINAL"
+    else:
+        overall_verdict = "OK"
 
     # ------------------------------------------------------------------
     # 2. Module summary table rows
