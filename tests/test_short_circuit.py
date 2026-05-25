@@ -161,3 +161,7 @@ def test_isc_aggregate_integration():
                 f"{cv.label}: expected 8 method_results "
                 f"(6 rest + 1 li_plating + 1 isc), got {len(cv.method_results)}"
             )
+            isc_mrs = [mr for mr in cv.method_results if mr.method_name == "isc"]
+            assert len(isc_mrs) == 1, (
+                f"{cv.label}: expected exactly 1 isc result, got {len(isc_mrs)}"
+            )

@@ -59,9 +59,10 @@ def aggregate(
 
     for ch in all_channels:
         # 1. Collect all z-scores (6 rest + 1 li_plating + optional 1 isc)
+        isc_mr = isc_results.get(ch) if isc_results is not None else None
         all_z = [mr.z_score for mr in rest_results[ch]] + [li_plating_results[ch].z_score]
-        if isc_results and ch in isc_results:
-            all_z.append(isc_results[ch].z_score)
+        if isc_mr is not None:
+            all_z.append(isc_mr.z_score)
 
         # 2. Compute composite z-score (clip to [0, 5] to prevent outlier domination)
         valid_z = [z for z in all_z if not np.isnan(z)]
@@ -80,8 +81,8 @@ def aggregate(
 
         # 5. Build CellVerdict
         method_results_list = rest_results[ch] + [li_plating_results[ch]]
-        if isc_results and ch in isc_results:
-            method_results_list = method_results_list + [isc_results[ch]]
+        if isc_mr is not None:
+            method_results_list = method_results_list + [isc_mr]
         cell_verdicts[ch] = CellVerdict(
             channel_index=ch,
             module_id=topology.module_for_channel(ch),
