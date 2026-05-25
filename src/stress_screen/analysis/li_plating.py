@@ -210,7 +210,7 @@ def run_li_plating_analysis(
             .sort_values("time_hours")
         )
         if len(ch_charge) < params.min_charge_points:
-            dv_metrics[ch] = 0.0
+            dv_metrics[ch] = np.nan
         else:
             dv_metrics[ch] = _compute_dvdq_peak_sum(
                 ch_charge["voltage"].values,
@@ -224,13 +224,10 @@ def run_li_plating_analysis(
     relax_metrics: dict[int, float] = {}
 
     for ch in channels:
-        ch_rest = (
-            rest_cell_df[
-                (rest_cell_df["channel_index"] == ch)
-                & (rest_cell_df["time_hours"] <= rest_cell_df["time_hours"].min() + params.relaxation_window_h)
-            ]
-            .sort_values("time_hours")
-        )
+        ch_rest = rest_cell_df[rest_cell_df["channel_index"] == ch].sort_values("time_hours")
+        if len(ch_rest) > 0:
+            ch_start = ch_rest["time_hours"].min()
+            ch_rest = ch_rest[ch_rest["time_hours"] <= ch_start + params.relaxation_window_h]
         relax_metrics[ch] = _compute_tau_inv(
             ch_rest["time_hours"].values,
             ch_rest["voltage"].values,

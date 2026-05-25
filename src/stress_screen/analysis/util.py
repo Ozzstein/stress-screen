@@ -36,6 +36,8 @@ def robust_z(values: np.ndarray) -> np.ndarray:
     np.ndarray of the same length as *values*.
     """
     values = np.asarray(values, dtype=float)
+    if np.all(np.isnan(values)):
+        return np.full_like(values, np.nan, dtype=float)
     median = np.nanmedian(values)
     mad = np.nanmedian(np.abs(values - median))
     return (values - median) / (1.4826 * mad + 1e-12)
