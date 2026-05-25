@@ -109,3 +109,48 @@ def cusum_2sided(
     all_alarms = sorted(alarms_pos + alarms_neg)
     first = all_alarms[0] if all_alarms else None
     return S_pos, S_neg, first, len(all_alarms)
+
+
+# ---------------------------------------------------------------------------
+# Arrhenius temperature correction
+# ---------------------------------------------------------------------------
+
+# Boltzmann constant in eV/K
+_K_B_EV_PER_K = 8.617333262e-5
+_T_REF_K = 298.15  # 25°C
+
+
+def arrhenius_correction(T_celsius: float, ea_ev: float) -> float:
+    """Return the multiplicative correction that normalises a rate measured
+    at *T_celsius* back to the 25°C reference using Arrhenius kinetics:
+
+        k(T_ref) = k(T) * exp( -Ea/k_B * (1/T_ref - 1/T) )
+
+    Parameters
+    ----------
+    T_celsius:
+        Cell temperature in degrees Celsius. NaN yields 1.0 (no correction).
+    ea_ev:
+        Activation energy in eV. 0.0 or negative returns 1.0 at all temperatures
+        (used for electronic shorts which are T-insensitive).
+    """
+    if np.isnan(T_celsius) or ea_ev <= 0.0:
+        return 1.0
+    T_K = T_celsius + 273.15
+    return float(np.exp(-ea_ev / _K_B_EV_PER_K * (1.0 / _T_REF_K - 1.0 / T_K)))
+
+
+# ---------------------------------------------------------------------------
+# Symmetric winsorize / clip
+# ---------------------------------------------------------------------------
+
+def winsorize_clip(values: np.ndarray, low: float, high: float) -> np.ndarray:
+    """Clip *values* to [low, high] while preserving NaNs.
+
+    Unlike `np.clip`, NaN inputs propagate (np.clip would also propagate,
+    but this wrapper documents the intent and gives a single audit point
+    for the composite-z aggregation choice).
+    """
+    arr = np.asarray(values, dtype=float)
+    out = np.where(np.isnan(arr), np.nan, np.clip(arr, low, high))
+    return out
