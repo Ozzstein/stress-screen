@@ -207,6 +207,7 @@ def _run(args: argparse.Namespace) -> None:
     from stress_screen.analysis.rest import run_rest_analysis, RestParams
     from stress_screen.analysis.li_plating import run_li_plating_analysis
     from stress_screen.analysis.aggregate import aggregate
+    from stress_screen.analysis.short_circuit import run_isc_analysis
     from stress_screen.models import AnalysisResult
 
     prog = get_progress()
@@ -318,7 +319,6 @@ def _run(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     # 6b. ISC analysis
     # ------------------------------------------------------------------
-    from stress_screen.analysis.short_circuit import run_isc_analysis
     prog.stage(f"Running ISC analysis on {n_active} channels...")
     isc_results = run_isc_analysis(
         rest_cell_df,
