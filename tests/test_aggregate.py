@@ -1,0 +1,179 @@
+import numpy as np
+import pytest
+from stress_screen.analysis.aggregate import aggregate
+from stress_screen.models import MethodResult, PackTopology
+from stress_screen.topology import derive_topology
+
+
+def _make_method(name, z):
+    return MethodResult(method_name=name, z_score=z,
+                        verdict="NORMAL", metadata={})
+
+
+def _build_inputs(z_per_channel):
+    """z_per_channel: dict[ch] -> list of 6 rest method z-scores + 1 li_plating z."""
+    rest_results = {}
+    li_results = {}
+    for ch, z_list in z_per_channel.items():
+        rest_results[ch] = [
+            _make_method(f"M{i+1}", z_list[i]) for i in range(6)
+        ]
+        li_results[ch] = _make_method("li_plating", z_list[6])
+    return rest_results, li_results
+
+
+def test_composite_preserves_extreme_pathological_z():
+    """A cell with one method at z=10 must still register strongly in the
+    composite (old behaviour clipped to 5 then averaged with 6 zeros gave 0.71;
+    new behaviour clips to 8 → 8/7 ≈ 1.14)."""
+    n = 8
+    z_map = {ch: [0.0] * 7 for ch in range(n)}
+    z_map[0][0] = 10.0  # M1 catastrophic
+    rest_r, li_r = _build_inputs(z_map)
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_r, li_r, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.composite_z > 1.0, (
+        f"Pathological z=10 should still register strongly; got composite_z={ch0_cv.composite_z}"
+    )
+
+
+def test_composite_does_not_clip_healthy_negative_z_to_zero():
+    """A consistently healthy cell (all z = -2) should produce composite < 0,
+    not 0 like before."""
+    n = 8
+    z_map = {ch: [0.0] * 7 for ch in range(n)}
+    z_map[0] = [-2.0] * 7
+    rest_r, li_r = _build_inputs(z_map)
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_r, li_r, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.composite_z < 0.0, (
+        f"All-negative-z cell should have negative composite_z; got {ch0_cv.composite_z}"
+    )
+
+
+def test_composite_weights_methods_by_confidence():
+    """Methods that publish a `confidence` metadata field should be weighted
+    accordingly. A high-confidence z=4 should dominate low-confidence z=0s."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        # ch0: M1 publishes confidence=1.0 with z=4 (catastrophic, trusted);
+        # other methods publish confidence=0.1 with z=0 (noisy, untrusted).
+        # Other channels: all zeros, all confidence=1.0.
+        if ch == 0:
+            m1 = MethodResult("M1", 4.0, "NORMAL", metadata={"confidence": 1.0})
+            others = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={"confidence": 0.1})
+                for i in range(1, 6)
+            ]
+            rest_results[ch] = [m1] + others
+            li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL",
+                                          metadata={"confidence": 0.1})
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={"confidence": 1.0})
+                for i in range(6)
+            ]
+            li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL",
+                                          metadata={"confidence": 1.0})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    # Weighted mean ch0: (4*1.0 + 0*0.1*6) / (1.0 + 6*0.1) = 4/1.6 = 2.5
+    # Unweighted (broken) would give: 4/7 ≈ 0.57
+    assert ch0_cv.composite_z > 2.0, (
+        f"High-confidence z=4 should dominate; got composite_z={ch0_cv.composite_z:.3f}. "
+        f"Unweighted would give 0.57; weighted should give ~2.5."
+    )
+
+
+def test_composite_default_confidence_is_unity():
+    """When no method publishes 'confidence' metadata, the composite should
+    match the unweighted (winsorized) mean — backward-compatible behaviour."""
+    n = 8
+    z_map = {ch: [0.0] * 7 for ch in range(n)}
+    z_map[0] = [3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    rest_r, li_r = _build_inputs(z_map)  # no 'confidence' key
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_r, li_r, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    # Unweighted mean of 1 method at z=3 + 6 at z=0 = 3/7 ≈ 0.43
+    # With default confidence=1.0, weighted result is identical.
+    assert abs(ch0_cv.composite_z - 3.0/7.0) < 0.01, (
+        f"Default confidence=1.0 must give unweighted mean; got {ch0_cv.composite_z:.3f}, "
+        f"expected {3.0/7.0:.3f}"
+    )
+
+
+def test_module_marginal_verdict_for_elevated_only_real():
+    """A module with at least one ELEVATED cell (composite_z > 1.0, no method >= 2.0)
+    and no HIGH cells should be MARGINAL."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            # 4 rest methods at z=1.9 (each < 2.0 → n_high=0), 2 at z=0, 1 li at 0
+            # composite_z = (1.9*4 + 0*3) / 7 ≈ 1.086 > 1.0 → ELEVATED
+            mrs = [
+                MethodResult("M1", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M2", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M3", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M4", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+            rest_results[ch] = mrs
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.verdict == "ELEVATED", (
+        f"Setup sanity: ch0 should be ELEVATED. Got {ch0_cv.verdict}, composite_z={ch0_cv.composite_z:.3f}"
+    )
+    assert verdicts[0].verdict == "MARGINAL", (
+        f"Module with one ELEVATED cell expected MARGINAL, got {verdicts[0].verdict}"
+    )
+
+
+def test_module_nok_overrides_marginal_when_any_high():
+    """Any HIGH cell still produces NOK regardless of how many MARGINAL cells."""
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            # Two methods at z=3 → composite > 2 → HIGH
+            rest_results[ch] = [
+                MethodResult("M1", 3.0, "HIGH", metadata={}),
+                MethodResult("M2", 3.0, "HIGH", metadata={}),
+            ] + [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(2, 6)
+            ]
+        elif ch == 1:
+            rest_results[ch] = [
+                MethodResult("M1", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M2", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M3", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M4", 1.9, "ELEVATED", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    assert verdicts[0].verdict == "NOK", f"Expected NOK with HIGH cell, got {verdicts[0].verdict}"

@@ -34,7 +34,8 @@ from scipy.optimize import OptimizeWarning, curve_fit
 from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult
-from stress_screen.analysis.util import robust_z
+from stress_screen.analysis.util import arrhenius_correction, robust_z
+from stress_screen.analysis.protocol import ProtocolMetadata
 from stress_screen._progress import get as _get_progress
 
 
@@ -60,9 +61,6 @@ class LiPlatingParams:
     Resampling before differentiating is the recommended ICA approach —
     it acts as implicit smoothing without distorting peak shapes."""
 
-    peak_prominence_pct: float = 0.05
-    """Minimum peak prominence as fraction of the dQ/dV range."""
-
     T_plating_threshold_c: float = 20.0
     """Charge-mean temperature (°C) above which plating is essentially
     impossible; electrical signatures are gated out above this value."""
@@ -70,6 +68,13 @@ class LiPlatingParams:
     T_default_gate: float = 0.5
     """Gate value used when temperature data is missing for a channel
     (mid-risk — neither fully trust nor fully gate)."""
+
+    gate_ea_ev: float = 0.55
+    """Activation energy (eV) for the Arrhenius plating-likelihood gate.
+    Plating is suppressed at warm temperatures via this Ea; default 0.55 eV
+    is roughly Li-intercalation kinetics for LFP (literature range
+    0.5–0.6 eV; chosen so a +10 K excursion above threshold suppresses the
+    gate to <0.5)."""
 
 
 # ---------------------------------------------------------------------------
@@ -95,52 +100,96 @@ def _verdict(z: float, z_thresh: float) -> str:
 # Sub-method 1: dQ/dV (incremental capacity) extra peak detection
 # ---------------------------------------------------------------------------
 
-def _compute_dqdv_peak_sum(
+def _compute_dqdv_features(
     voltage: np.ndarray,
     q_axis: np.ndarray | None,
     dv_step: float,
     peak_prominence_pct: float,
-) -> float:
-    """Return sum of peak prominences in the dQ/dV (incremental capacity) curve.
+    main_plateau_v_max: float = 3.45,
+) -> tuple[float, float]:
+    """Return (sum of peak prominences, voltage of the highest *extra* peak above
+    the main plateau).
 
     Resamples at *dv_step*-V intervals before differentiating — per ICA
-    best-practice: smooth before, not after, the derivative. Returns 0.0
-    when *q_axis* is None (Q data required for this metric).
+    best-practice: smooth before, not after, the derivative.
+
+    The extra-peak voltage is the V position of the most prominent peak that
+    sits ABOVE main_plateau_v_max — the LFP main plateau ends around 3.4 V,
+    so any sharp dQ/dV peak above that is anomalous and consistent with
+    Li-plating-induced staging. This metric is invariant to Q-axis scale
+    (only V-axis positions matter), making it robust when the Q calibration
+    is uncertain.
+
+    Returns (0.0, nan) when q_axis is missing or peaks can't be found.
     """
     if q_axis is None or len(voltage) < 5:
-        return 0.0
+        return 0.0, float("nan")
 
-    # Sort by voltage, remove duplicate V values
-    idx = np.argsort(voltage)
+    # Sort by voltage. For each unique V value, encode any "voltage plateau"
+    # (multiple samples at the same V with Q growing in time) as a near-vertical
+    # Q step: keep the lowest-Q sample at V and the highest-Q sample at V + ε.
+    # This preserves the plateau's Q delta — otherwise duplicate-V filtering
+    # would collapse the plateau and erase the V-domain dQ/dV peak it produces.
+    idx = np.argsort(voltage, kind="stable")
     v_s = voltage[idx]
     q_s = q_axis[idx]
+
+    eps = dv_step * 1e-3
+    unique_v, inv = np.unique(v_s, return_inverse=True)
+    v_list: list[float] = []
+    q_list: list[float] = []
+    for k, uv in enumerate(unique_v):
+        q_group = q_s[inv == k]
+        q_min = float(np.min(q_group))
+        q_max = float(np.max(q_group))
+        v_list.append(float(uv))
+        q_list.append(q_min)
+        if q_max - q_min > 0:
+            v_list.append(float(uv) + eps)
+            q_list.append(q_max)
+    v_s = np.asarray(v_list, dtype=float)
+    q_s = np.asarray(q_list, dtype=float)
+    # Ensure strictly monotonic V (after epsilon shifts duplicate uv+eps could
+    # collide with the next unique V if dv_step is small; enforce strict order)
     mono = np.concatenate([[True], np.diff(v_s) > 0])
     v_s, q_s = v_s[mono], q_s[mono]
 
     if len(v_s) < 5:
-        return 0.0
+        return 0.0, float("nan")
 
-    # Resample at uniform ΔV grid (implicit smoothing — no post-gradient filter)
     v_grid = np.arange(v_s[0], v_s[-1] + dv_step, dv_step)
     if len(v_grid) < 5:
-        return 0.0
+        return 0.0, float("nan")
 
     q_interp = np.interp(v_grid, v_s, q_s)
     dqdv = np.gradient(q_interp, v_grid)
-    dqdv = np.clip(dqdv, 0.0, None)  # negative values are non-physical during charge
+    dqdv = np.clip(dqdv, 0.0, None)
 
     ptp = np.ptp(dqdv)
     if ptp < 1e-12:
-        return 0.0
+        return 0.0, float("nan")
 
     min_prominence = peak_prominence_pct * ptp
 
     try:
-        _, props = signal.find_peaks(dqdv, prominence=min_prominence)
+        peak_idx, props = signal.find_peaks(dqdv, prominence=min_prominence)
         prominences = props.get("prominences", np.array([]))
-        return float(np.sum(prominences)) if len(prominences) > 0 else 0.0
+        peak_sum = float(np.sum(prominences)) if len(prominences) > 0 else 0.0
+
+        # Find the highest extra peak (above the main plateau).
+        extra_v = float("nan")
+        if len(peak_idx) > 0:
+            peak_v = v_grid[peak_idx]
+            above_plateau = peak_v > main_plateau_v_max
+            if above_plateau.any():
+                # Pick the most prominent peak above the plateau.
+                proms_above = prominences[above_plateau]
+                v_above = peak_v[above_plateau]
+                extra_v = float(v_above[int(np.argmax(proms_above))])
+
+        return peak_sum, extra_v
     except Exception:
-        return 0.0
+        return 0.0, float("nan")
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +250,7 @@ def run_li_plating_analysis(
     params: LiPlatingParams | None = None,
     top_charge_df: pd.DataFrame | None = None,
     n_parallel: int = 1,
+    protocol: ProtocolMetadata | None = None,
 ) -> dict[int, MethodResult]:
     """Detect Li-plating signatures.
 
@@ -222,6 +272,8 @@ def run_li_plating_analysis(
     """
     if params is None:
         params = LiPlatingParams()
+    if protocol is None:
+        protocol = ProtocolMetadata()
 
     # Build pack-level Q axis from charge current when available
     q_pack_time: np.ndarray | None = None
@@ -260,6 +312,7 @@ def run_li_plating_analysis(
     # Sub-method 1: dV/dQ peak prominence sum (charge phase)
     # ------------------------------------------------------------------
     dv_metrics: dict[int, float] = {}
+    dv_extra_peak_v: dict[int, float] = {}
 
     for ch in tqdm(
         channels,
@@ -275,17 +328,18 @@ def run_li_plating_analysis(
         )
         if len(ch_charge) < params.min_charge_points:
             dv_metrics[ch] = np.nan
+            dv_extra_peak_v[ch] = float("nan")
         else:
             q_ch: np.ndarray | None = None
             if q_pack_time is not None:
                 q_ch = np.interp(
                     ch_charge["time_hours"].values, q_pack_time, q_pack_cumul
                 )
-            dv_metrics[ch] = _compute_dqdv_peak_sum(
+            dv_metrics[ch], dv_extra_peak_v[ch] = _compute_dqdv_features(
                 ch_charge["voltage"].values,
                 q_axis=q_ch,
                 dv_step=params.dv_step_v,
-                peak_prominence_pct=params.peak_prominence_pct,
+                peak_prominence_pct=protocol.dqdv_prominence_pct(),
             )
 
     # ------------------------------------------------------------------
@@ -378,7 +432,8 @@ def run_li_plating_analysis(
             dT_late_metrics[ch] = np.nan
         else:
             dt_late = T_late_mean - T_mid_mean
-            dT_late_metrics[ch] = dt_late if abs(dt_late) >= 0.3 else np.nan
+            noise_floor = protocol.dt_late_noise_floor_k()
+            dT_late_metrics[ch] = dt_late if abs(dt_late) >= noise_floor else np.nan
 
     # ------------------------------------------------------------------
     # Compute robust z-scores for each sub-method
@@ -401,14 +456,19 @@ def run_li_plating_analysis(
     # ------------------------------------------------------------------
     # Cold-temperature gating for electrical signatures
     # ------------------------------------------------------------------
+    # Arrhenius temperature gate: anchor gate=1.0 at the threshold temperature.
+    # Plating kinetics ∝ exp(Ea/k_B * (1/T - 1/T_thr)), so the gate is the
+    # ratio of Arrhenius corrections at T vs the threshold temperature.
     T_thr = params.T_plating_threshold_c
+    gate_at_thr = arrhenius_correction(T_celsius=T_thr, ea_ev=params.gate_ea_ev)
     gates: list[float] = []
     for T_mean in T_mean_arr:
         if np.isnan(T_mean):
             gate = params.T_default_gate
         else:
-            gate = max(0.0, T_thr - float(T_mean)) / T_thr
-            gate = min(1.5, gate)
+            ratio = arrhenius_correction(T_celsius=float(T_mean), ea_ev=params.gate_ea_ev) / gate_at_thr
+            # Cap the boost so a very cold cell doesn't dominate (max 3x)
+            gate = float(min(3.0, ratio))
         gates.append(gate)
 
     # ------------------------------------------------------------------
@@ -450,6 +510,7 @@ def run_li_plating_analysis(
                 "relaxation_z": relax_z,
                 "charge_time_z": time_z,
                 "dqdv_extra_peak_sum": float(dv_metrics[ch]),
+                "dqdv_extra_peak_voltage": float(dv_extra_peak_v[ch]),
                 "tau_inv": float(relax_metrics[ch]),
                 "charge_duration_h": float(time_metrics[ch]),
                 # Temperature signatures

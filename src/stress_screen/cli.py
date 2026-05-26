@@ -110,11 +110,16 @@ def _print_verdicts(module_verdicts, verbose: bool = False) -> None:
 
     print()
     nok_count = sum(1 for m in module_verdicts if m.verdict == "NOK")
+    marginal_count = sum(1 for m in module_verdicts if m.verdict == "MARGINAL")
     total = len(module_verdicts)
-    if nok_count == 0:
+    if nok_count == 0 and marginal_count == 0:
         print(f"Result: all {total} modules OK")
-    else:
+    elif nok_count == 0:
+        print(f"Result: {marginal_count} of {total} modules MARGINAL")
+    elif marginal_count == 0:
         print(f"Result: {nok_count} of {total} modules NOK")
+    else:
+        print(f"Result: {nok_count} of {total} modules NOK, {marginal_count} MARGINAL")
 
 
 # ---------------------------------------------------------------------------

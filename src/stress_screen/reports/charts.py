@@ -88,8 +88,8 @@ def pack_heatmap(result: AnalysisResult) -> go.Figure:
                 row_txt.append("")
         z_matrix.append(row_z)
         text_matrix.append(row_txt)
-        nok = (mv.verdict == "NOK") if mv is not None else False
-        y_labels.append(f"M{mid} {'NOK' if nok else 'OK'}")
+        verdict_label = mv.verdict if mv is not None else "OK"
+        y_labels.append(f"M{mid} {verdict_label}")
 
     x_labels = [f"G{g}" for g in range(1, n_groups + 1)]
 

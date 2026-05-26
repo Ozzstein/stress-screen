@@ -22,7 +22,7 @@ from scipy import stats as _stats
 from scipy.integrate import cumulative_trapezoid, trapezoid
 
 from stress_screen.models import MethodResult
-from stress_screen.analysis.util import robust_z
+from stress_screen.analysis.util import arrhenius_correction, robust_z
 
 
 @dataclass
@@ -36,7 +36,11 @@ class ShortCircuitParams:
     n_q_resample: int = 500
     """Number of uniformly-spaced Q points for S3 dV/dQ resampling.
     Pre-resampling replaces post-gradient Savitzky-Golay smoothing."""
-    peak_prominence_pct: float = 0.05
+
+    isc_ea_ev: float = 0.1
+    """Activation energy (eV) for ISC-specific temperature correction.
+    Lower than the 0.5 eV used for benign SEI self-discharge because
+    metallic-Li bridging is largely electronic (T-insensitive)."""
 
 
 def _verdict(z: float, z_thresh: float) -> str:
@@ -103,15 +107,30 @@ def run_isc_analysis(
             "n_set": len(settled),
         }
 
-    # S1: Excess self-discharge rate
-    m1_k: dict[int, float] = {}
+    # S1: Excess self-discharge rate (uses ISC-Ea-corrected k, not raw)
+    m1_k_corr: dict[int, float] = {}
     for ch in channels:
         if ch in rest_results and rest_results[ch]:
-            m1_k[ch] = float(rest_results[ch][0].metadata.get("k", np.nan))
+            k_raw = float(rest_results[ch][0].metadata.get("k", np.nan))
+            # Prefer M5 metadata when present (T_mean is computed there)
+            T_mean_ch = np.nan
+            m5_mr = next(
+                (mr for mr in rest_results[ch] if mr.method_name == "M5_temp_k"),
+                None,
+            )
+            if m5_mr is not None:
+                T_mean_ch = float(m5_mr.metadata.get("T_mean", np.nan))
+            if np.isnan(T_mean_ch):
+                # Fall back to rest-segment temperature
+                ch_rest = rest_cell_df[rest_cell_df["channel_index"] == ch]
+                if "temperature" in ch_rest.columns and len(ch_rest) > 0:
+                    T_mean_ch = float(np.nanmean(ch_rest["temperature"].values))
+            correction = arrhenius_correction(T_celsius=T_mean_ch, ea_ev=params.isc_ea_ev)
+            m1_k_corr[ch] = k_raw * correction if not np.isnan(k_raw) else np.nan
         else:
-            m1_k[ch] = np.nan
+            m1_k_corr[ch] = np.nan
 
-    k_arr = np.array([m1_k.get(ch, np.nan) for ch in channels])
+    k_arr = np.array([m1_k_corr[ch] for ch in channels])
     valid_k = k_arr[~np.isnan(k_arr)]
 
     s1_excess: dict[int, float] = {}
@@ -210,6 +229,7 @@ def run_isc_analysis(
                 "s2_dT_dt_z": z2,
                 "s3_area_deficit_z": z3,
                 "s1_excess_k": float(s1_excess[ch]),
+                "s1_k_corrected_isc": float(m1_k_corr[ch]),
                 "s2_dT_dt_slope": float(s2_slope[ch]),
                 "s3_dvdq_area": float(s3_area[ch]),
             },

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -23,7 +23,12 @@ from scipy.optimize import OptimizeWarning, curve_fit
 from tqdm.auto import tqdm
 
 from stress_screen.models import MethodResult, PackTopology
-from stress_screen.analysis.util import cusum_2sided, ocv_model, robust_z
+from stress_screen.analysis.util import (
+    arrhenius_correction,
+    cusum_2sided,
+    ocv_model,
+    robust_z,
+)
 from stress_screen._progress import get as _get_progress
 
 
@@ -271,16 +276,24 @@ def run_rest_analysis(
     m2_z: dict[int, float] = {ch: float(r_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
-    # M3 — Voltage spread / divergence slope                               #
+    # M3 — Slope of |V_cell − V_fleet_median| (divergence rate)            #
     # ------------------------------------------------------------------ #
     m3_spread: dict[int, float] = {}
 
     if not pivot_v.empty:
         fleet_med = pivot_v.median(axis=1)
+        t_index = pivot_v.index.values  # _t_rel in hours
         for ch in channels:
             if ch in pivot_v.columns and chan_data[ch]["n_set"] >= params.min_points:
-                deviation = pivot_v[ch] - fleet_med
-                m3_spread[ch] = float(np.nanstd(deviation.values))
+                deviation_abs = np.abs((pivot_v[ch] - fleet_med).values)
+                valid = ~np.isnan(deviation_abs)
+                if valid.sum() >= 5:
+                    slope_dev, *_ = _stats.linregress(t_index[valid], deviation_abs[valid])
+                    # Sign matters: positive slope = diverging away from fleet.
+                    # Use max(0, slope) so converging cells aren't flagged.
+                    m3_spread[ch] = float(max(0.0, slope_dev))
+                else:
+                    m3_spread[ch] = np.nan
             else:
                 m3_spread[ch] = np.nan
     else:
@@ -351,14 +364,8 @@ def run_rest_analysis(
 
         m5_T_mean[ch] = T_mean
 
-        if not np.isnan(T_mean):
-            T_K = T_mean + 273.15
-            T_ref_K = 298.15
-            Ea_J = params.arrhenius_ea_ev * 96_485.0  # eV → J/mol
-            correction = np.exp(-Ea_J / 8.314 * (1.0 / T_ref_K - 1.0 / T_K))
-            m5_k_corr[ch] = k_raw * correction
-        else:
-            m5_k_corr[ch] = k_raw
+        correction = arrhenius_correction(T_celsius=T_mean, ea_ev=params.arrhenius_ea_ev)
+        m5_k_corr[ch] = k_raw * correction
 
     k_corr_arr = np.array([m5_k_corr[ch] for ch in channels])
     k_corr_z_arr = robust_z(k_corr_arr)
@@ -459,14 +466,14 @@ def run_rest_analysis(
 
         # M3
         if insufficient or np.isnan(m3_spread.get(ch, np.nan)):
-            m3_res = _nan_result("M3_spread", {"spread_std": np.nan})
+            m3_res = _nan_result("M3_spread", {"divergence_slope_v_per_h": np.nan})
         else:
             z3 = m3_z[ch]
             m3_res = MethodResult(
                 method_name="M3_spread",
                 z_score=z3,
                 verdict=_verdict(z3, params.z_thresh),
-                metadata={"spread_std": m3_spread[ch]},
+                metadata={"divergence_slope_v_per_h": m3_spread[ch]},
             )
 
         # M4
