@@ -22,7 +22,7 @@ def ocv_model(t: np.ndarray, V_ocv: float, a: float, tau: float, k: float) -> np
 # Robust z-score
 # ---------------------------------------------------------------------------
 
-def robust_z(values: np.ndarray) -> np.ndarray:
+def robust_z(values: np.ndarray, min_mad: float = 0.0) -> np.ndarray:
     """Compute median-MAD robust z-scores.
 
     Parameters
@@ -30,6 +30,13 @@ def robust_z(values: np.ndarray) -> np.ndarray:
     values:
         1-D array of floats (NaNs are ignored in median/MAD computation but
         propagate in the output).
+    min_mad:
+        Minimum absolute MAD scale. When the fleet is uniformly healthy the
+        empirical MAD can be exactly zero; dividing by 1e-12 then produces
+        z-scores in the millions for any nonzero deviation. Setting min_mad
+        to a physically meaningful noise floor (e.g. 5e-6 V/h for voltage
+        divergence slopes) keeps z-scores interpretable and prevents noise
+        from triggering HIGH verdicts.
 
     Returns
     -------
@@ -39,7 +46,7 @@ def robust_z(values: np.ndarray) -> np.ndarray:
     if np.all(np.isnan(values)):
         return np.full_like(values, np.nan, dtype=float)
     median = np.nanmedian(values)
-    mad = np.nanmedian(np.abs(values - median))
+    mad = max(float(np.nanmedian(np.abs(values - median))), min_mad)
     return (values - median) / (1.4826 * mad + 1e-12)
 
 

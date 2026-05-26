@@ -1,3 +1,4 @@
+import os
 import pytest
 from pathlib import Path
 
@@ -7,11 +8,15 @@ def test_html_and_pdf_generated(tmp_path):
     csv = next(Path(".").glob("*.csv"), None)
     if csv is None:
         pytest.skip("No CSV file found in project root")
+    env = os.environ.copy()
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
         [sys.executable, "-m", "stress_screen", str(csv), "--out-dir", str(tmp_path)],
         capture_output=True,
         text=True,
         cwd=str(Path(".").resolve()),
+        env=env,
     )
     assert result.returncode in (0, 1), f"Exit code {result.returncode}: {result.stderr}"
     html_files = list(tmp_path.glob("*.html"))

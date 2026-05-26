@@ -71,6 +71,26 @@ class RestParams:
     m6_slope_weight: float = 0.5
     """Weight applied to the rank-slope penalty term in the M6 composite score."""
 
+    m6_max_slope_contribution: float = 1.0
+    """Maximum contribution the slope term can add to the M6 score.
+
+    The raw slope term is -rank_slope × t_span (units: %-rank). For a 54 h rest
+    a module drifting at 0.2 %/h generates 10.8 per cell — enough to flag every
+    cell in the module HIGH from module-level SOC drift alone. Capping at 1.0
+    limits this flood while still distinguishing cells with genuinely rapid rank
+    decline from their module-mates.
+    """
+
+    m3_min_slope_mad_v_per_h: float = 5e-6
+    """Minimum MAD scale (V/h) for M3 divergence-slope z-scores.
+
+    When the fleet is healthy, empirical MAD ≈ 0 and dividing by it inflates
+    any nonzero slope into a millions-scale z-score. This floor sets the
+    effective noise threshold: 5 µV/h corresponds to ~0.27 mV of total OCV
+    divergence over a 54 h rest — roughly the measurement noise floor for LFP.
+    Only slopes meaningfully above this level will escalate toward HIGH.
+    """
+
 
 # ---------------------------------------------------------------------------
 # Verdict helper
@@ -301,7 +321,7 @@ def run_rest_analysis(
             m3_spread[ch] = np.nan
 
     spread_arr = np.array([m3_spread[ch] for ch in channels])
-    spread_z_arr = robust_z(spread_arr)
+    spread_z_arr = robust_z(spread_arr, min_mad=params.m3_min_slope_mad_v_per_h)
     m3_z: dict[int, float] = {ch: float(spread_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
@@ -414,14 +434,22 @@ def run_rest_analysis(
             m6_t_span[ch] = 0.0
 
     m6_score: dict[int, float] = {}
+    m6_slope_raw: dict[int, float] = {}
+    m6_slope_capped: dict[int, float] = {}
     for ch in channels:
         fb = m6_frac_bot20.get(ch, np.nan)
         if np.isnan(fb):
             m6_score[ch] = np.nan
+            m6_slope_raw[ch] = np.nan
+            m6_slope_capped[ch] = np.nan
         else:
             slope = m6_rank_slope.get(ch, 0.0)
             t_span = m6_t_span.get(ch, 0.0)
-            m6_score[ch] = fb + params.m6_slope_weight * max(0.0, -slope * t_span)
+            raw_slope_contrib = max(0.0, -slope * t_span)
+            capped_slope_contrib = min(raw_slope_contrib, params.m6_max_slope_contribution)
+            m6_score[ch] = fb + params.m6_slope_weight * capped_slope_contrib
+            m6_slope_raw[ch] = raw_slope_contrib
+            m6_slope_capped[ch] = capped_slope_contrib
 
     score_arr = np.array([m6_score[ch] for ch in channels])
     score_z_arr = robust_z(score_arr)
@@ -526,6 +554,8 @@ def run_rest_analysis(
                     "mean_rank_pct": m6_mean_rank[ch],
                     "frac_bot20": m6_frac_bot20[ch],
                     "rank_slope": m6_rank_slope[ch],
+                    "slope_contribution_raw": m6_slope_raw[ch],
+                    "slope_contribution_capped": m6_slope_capped[ch],
                 },
             )
 

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from stress_screen.analysis.util import arrhenius_correction, winsorize_clip
+from stress_screen.analysis.util import arrhenius_correction, robust_z, winsorize_clip
 
 
 def test_arrhenius_correction_at_t_ref_is_unity():
@@ -42,6 +42,37 @@ def test_winsorize_clip_preserves_nans():
     assert np.isnan(out[0])
     assert out[1] == 2.0
     assert out[2] == 5.0
+
+
+def test_robust_z_min_mad_prevents_mad_zero_inflation():
+    """When all-but-one values are identical (MAD=0), z without a floor would be
+    millions; with min_mad set to a known scale the result is interpretable."""
+    values = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-5])
+    # Without floor: z[-1] = 1e-5 / (1.4826 * 0 + 1e-12) ≈ 10^7
+    z_no_floor = robust_z(values)
+    assert z_no_floor[-1] > 1e5, "Without floor, z should be enormous"
+
+    # With min_mad = 5e-6: z[-1] = 1e-5 / (1.4826 * 5e-6) ≈ 1.35
+    z_floored = robust_z(values, min_mad=5e-6)
+    assert 1.0 < z_floored[-1] < 2.0, (
+        f"With 5e-6 floor, z[-1] should be ~1.35; got {z_floored[-1]:.3f}"
+    )
+
+
+def test_robust_z_min_mad_zero_is_same_as_no_floor():
+    """min_mad=0 (default) preserves existing behaviour."""
+    values = np.array([1.0, 2.0, 3.0, 4.0, 100.0])
+    np.testing.assert_array_equal(robust_z(values), robust_z(values, min_mad=0.0))
+
+
+def test_robust_z_min_mad_not_applied_when_empirical_mad_is_larger():
+    """min_mad only raises the floor; it must not shrink a larger empirical MAD."""
+    values = np.array([0.0, 1.0, 2.0, 3.0, 100.0])
+    empirical_mad = float(np.median(np.abs(values - np.median(values))))
+    z_floor = robust_z(values, min_mad=empirical_mad * 0.1)
+    z_no_floor = robust_z(values, min_mad=0.0)
+    # Floor is 10% of empirical MAD → has no effect
+    np.testing.assert_array_almost_equal(z_floor, z_no_floor)
 
 
 def test_protocol_metadata_defaults_lfp():

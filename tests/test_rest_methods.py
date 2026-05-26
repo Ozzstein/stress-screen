@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 from stress_screen.analysis.rest import run_rest_analysis, RestParams
 from stress_screen.topology import derive_topology
 
@@ -168,4 +169,80 @@ def test_m3_flags_drifting_cell_over_static_offset():
             for ch in range(n)}
     assert m3_z[0] > m3_z[1], (
         f"Drifting ch0 M3 z={m3_z[0]:.3f} must exceed static-offset ch1 M3 z={m3_z[1]:.3f}"
+    )
+
+
+def test_m3_noise_floor_prevents_false_high_on_healthy_fleet():
+    """When all cells have near-zero divergence slopes (healthy fleet), no cell
+    should reach HIGH on M3 — even if a few have tiny nonzero slopes that are
+    well within measurement noise (< 5 µV/h = default min_mad floor)."""
+    rng = np.random.default_rng(99)
+    n = 16
+    t = np.linspace(0, 10.0, 500)
+    rows = []
+    for ch in range(n):
+        # All cells follow the same OCV model; ch0 has a tiny 2 µV/h divergence
+        # (well below the 5 µV/h floor) that would produce z~millions without a floor.
+        tiny_slope = 2e-6 if ch == 0 else 0.0
+        V = 3.42 + 0.05 * np.exp(-t / 2.0) - 1e-4 * t - tiny_slope * t + rng.normal(0, 1e-4, len(t))
+        T = 25.0 + rng.normal(0, 0.05, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n, 1)
+    results = run_rest_analysis(rest_df, topo)
+    m3_verdict_ch0 = next(mr.verdict for mr in results[0] if mr.method_name == "M3_spread")
+    m3_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "M3_spread")
+    assert m3_verdict_ch0 != "HIGH", (
+        f"Noise-level 2 µV/h slope should not be HIGH; got verdict={m3_verdict_ch0}, z={m3_z_ch0:.2f}"
+    )
+
+
+def test_m6_slope_cap_score_formula():
+    """The cap must bound the raw slope contribution stored in M6 metadata.
+
+    For any cell whose raw_slope_contrib exceeds the cap, the capped value must
+    be strictly less than the raw value.  For cells that don't hit the cap,
+    capped == raw.  This tests the score-level computation directly and is
+    unaffected by the z-score normalisation step.
+    """
+    rng = np.random.default_rng(42)
+    n = 16
+    t = np.linspace(2.5, 60.0, 800)
+
+    rows = []
+    for ch in range(n):
+        k = 1.3e-4 if ch == 0 else 1e-4
+        V = 3.40 - k * t + rng.normal(0, 3e-5, len(t))
+        T = 25.0 + rng.normal(0, 0.05, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n, 2)  # 2 modules of 8
+
+    cap = 0.05
+    results = run_rest_analysis(rest_df, topo, params=RestParams(m6_max_slope_contribution=cap))
+
+    cap_active_on_any = False
+    for ch in range(n):
+        m6 = next(mr for mr in results[ch] if mr.method_name == "M6_rank")
+        raw = m6.metadata.get("slope_contribution_raw", float("nan"))
+        capped = m6.metadata.get("slope_contribution_capped", float("nan"))
+        if np.isnan(raw):
+            continue
+        if raw > cap:
+            assert capped == pytest.approx(cap, abs=1e-9), (
+                f"ch{ch}: raw={raw:.4f} > cap={cap} but capped={capped:.4f} != cap"
+            )
+            cap_active_on_any = True
+        else:
+            assert capped == pytest.approx(raw, abs=1e-9), (
+                f"ch{ch}: raw={raw:.4f} ≤ cap={cap} but capped={capped:.4f} != raw"
+            )
+
+    assert cap_active_on_any, (
+        "No channel had raw_slope_contrib > cap — increase drift or lower cap"
     )
