@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,11 +9,15 @@ def test_e2e_cli():
     csv = next(Path(".").glob("*.csv"), None)
     if csv is None:
         import pytest; pytest.skip("No CSV file found in project root")
+    env = os.environ.copy()
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
         [sys.executable, "-m", "stress_screen", str(csv), "--no-html", "--no-pdf"],
         capture_output=True,
         text=True,
         cwd=str(Path(".").resolve()),
+        env=env,
     )
     assert result.returncode in (0, 1), f"Unexpected exit code {result.returncode}: {result.stderr}"
     # Verify output contains module lines
