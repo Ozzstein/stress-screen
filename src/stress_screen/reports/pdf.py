@@ -34,10 +34,12 @@ from reportlab.platypus import (
 
 from stress_screen.models import AnalysisResult
 from stress_screen.reports.charts import (
+    divergence_chart,
     dv_dq_chart,
     ocv_fit_overlay,
     pack_heatmap,
     phase_timeline,
+    rank_chart,
 )
 
 
@@ -309,29 +311,40 @@ def _pages_per_module(
     top_charge_df: "pd.DataFrame | None" = None,
     n_parallel: int = 1,
 ) -> list:
-    """Two charts per page (OCV fit + dQ/dV) for each module."""
+    """Four charts across two pages for each module.
+
+    Page 1: OCV relaxation overlay + Voltage divergence (M3)
+    Page 2: dQ/dV incremental capacity + Rank percentile (M6)
+    """
     flowables = []
     usable_w = page_w - 2 * margin
-    chart_h = (page_h - 2 * margin - 4 * cm) / 2  # two charts, allow space for heading
+    chart_h = (page_h - 2 * margin - 4 * cm) / 2
 
     for mv in result.module_verdicts:
         mid = mv.module_id
 
-        flowables.append(Paragraph(f"Module M{mid} — OCV Fit &amp; dQ/dV", styles["h2"]))
+        # --- Page 1: rest-phase charts ---
+        flowables.append(Paragraph(f"Module M{mid} — Rest Phase Analysis", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
 
-        # OCV fit overlay
         fig_ocv = ocv_fit_overlay(result, mid, rest_cell_df)
-        img_ocv = _fig_to_image(fig_ocv, usable_w, chart_h)
-        flowables.append(img_ocv)
-
+        flowables.append(_fig_to_image(fig_ocv, usable_w, chart_h))
         flowables.append(Spacer(1, 0.3 * cm))
 
-        # dQ/dV
-        fig_dvdq = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
-        img_dvdq = _fig_to_image(fig_dvdq, usable_w, chart_h)
-        flowables.append(img_dvdq)
+        fig_div = divergence_chart(result, mid, rest_cell_df)
+        flowables.append(_fig_to_image(fig_div, usable_w, chart_h))
+        flowables.append(PageBreak())
 
+        # --- Page 2: charge-phase + rank charts ---
+        flowables.append(Paragraph(f"Module M{mid} — Charge Phase &amp; Rank Analysis", styles["h2"]))
+        flowables.append(Spacer(1, 0.2 * cm))
+
+        fig_dvdq = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
+        flowables.append(_fig_to_image(fig_dvdq, usable_w, chart_h))
+        flowables.append(Spacer(1, 0.3 * cm))
+
+        fig_rank = rank_chart(result, mid, rest_cell_df)
+        flowables.append(_fig_to_image(fig_rank, usable_w, chart_h))
         flowables.append(PageBreak())
 
     return flowables

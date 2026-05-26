@@ -18,10 +18,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from stress_screen.models import AnalysisResult
 from stress_screen.reports.charts import (
     cell_detail_card,
+    divergence_chart,
     dv_dq_chart,
     ocv_fit_overlay,
     pack_heatmap,
     phase_timeline,
+    rank_chart,
 )
 
 # ---------------------------------------------------------------------------
@@ -187,6 +189,8 @@ def write_html_report(
 
         ocv_fig = ocv_fit_overlay(result, mid, rest_cell_df)
         dvdq_fig = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
+        div_fig = divergence_chart(result, mid, rest_cell_df)
+        rank_fig = rank_chart(result, mid, rest_cell_df)
 
         # Flagged cell detail cards
         flagged_cells_data: list[dict[str, Any]] = []
@@ -251,6 +255,8 @@ def write_html_report(
                 "verdict": mv.verdict,
                 "ocv_chart": _render(ocv_fig),
                 "dvdq_chart": _render(dvdq_fig),
+                "divergence_chart": _render(div_fig),
+                "rank_chart": _render(rank_fig),
                 "flagged_cells": flagged_cells_data,
                 "all_cells": all_cells_data,
                 "method_names": method_names,

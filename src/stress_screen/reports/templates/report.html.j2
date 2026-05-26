@@ -385,8 +385,16 @@
           {{ mod.ocv_chart | safe }}
         </div>
         <div class="chart-box">
-          <h4>dV/dQ (Charge Phase)</h4>
+          <h4>dQ/dV — Incremental Capacity (Charge Phase)</h4>
           {{ mod.dvdq_chart | safe }}
+        </div>
+        <div class="chart-box">
+          <h4>Voltage Divergence from Fleet Median — M3</h4>
+          {{ mod.divergence_chart | safe }}
+        </div>
+        <div class="chart-box">
+          <h4>Voltage Rank Percentile Over Rest — M6</h4>
+          {{ mod.rank_chart | safe }}
         </div>
       </div>
 

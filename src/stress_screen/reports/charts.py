@@ -237,9 +237,10 @@ def _compute_dqdv(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute dQ/dV via voltage-domain resampling at *dv_step* V intervals.
 
-    Follows ICA best-practice: resample before differentiating (implicit
-    smoothing), no post-gradient filter. Returns empty arrays when Q data
-    is unavailable — caller must handle the empty-array case.
+    Resamples Q(V) onto a uniform voltage grid, applies Savitzky-Golay
+    smoothing on Q before differentiating — ICA best practice. Smoothing
+    Q rather than dQ/dV preserves peak positions while removing measurement
+    noise. Returns empty arrays when Q data is unavailable.
     """
     if q_pack_time is None or q_pack_cumul is None:
         return np.array([]), np.array([])
@@ -261,6 +262,15 @@ def _compute_dqdv(
         return np.array([]), np.array([])
 
     q_interp = np.interp(v_grid, v_s, q_s)
+
+    # Smooth Q(V) before differentiation: odd window ≤21 points (≤ 42 mV)
+    from scipy.signal import savgol_filter as _sg
+    wl = min(21, len(q_interp))
+    if wl % 2 == 0:
+        wl -= 1
+    wl = max(wl, 5)
+    q_interp = _sg(q_interp, window_length=wl, polyorder=3)
+
     dqdv = np.gradient(q_interp, v_grid)
     dqdv = np.clip(dqdv, 0.0, None)  # non-physical negative values removed
     return v_grid, dqdv
@@ -528,7 +538,154 @@ def cell_detail_card(
 
 
 # ---------------------------------------------------------------------------
-# 5. phase_timeline
+# 5. divergence_chart  — M3 visualisation
+# ---------------------------------------------------------------------------
+
+def divergence_chart(
+    result: AnalysisResult,
+    module_id: int,
+    rest_cell_df: Optional[pd.DataFrame] = None,
+) -> go.Figure:
+    """|V_cell − V_module_median| vs time for every cell in a module.
+
+    Highlights cells whose deviation is growing over time (M3 divergence
+    slope). HIGH/ELEVATED verdicts are coloured; others are gray.
+    """
+    fig = go.Figure()
+    fig.update_layout(
+        title=f"Module M{module_id} — Voltage Divergence from Fleet Median (M3)",
+        xaxis_title="Time from rest start (h)",
+        yaxis_title="|V − fleet median| (mV)",
+        template="plotly_white",
+    )
+
+    if rest_cell_df is None or rest_cell_df.empty:
+        fig.add_annotation(text="No rest data", showarrow=False,
+                           xref="paper", yref="paper", x=0.5, y=0.5)
+        return fig
+
+    topo = result.topology
+    channels = sorted(topo.channels_in_module(module_id))
+    mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
+    verdict_map: dict[int, str] = {}
+    label_map: dict[int, str] = {}
+    if mv is not None:
+        for cv in mv.all_cells:
+            verdict_map[cv.channel_index] = cv.verdict
+            label_map[cv.channel_index] = cv.label
+
+    mod_df = rest_cell_df[rest_cell_df["channel_index"].isin(channels)].copy()
+    if mod_df.empty:
+        return fig
+
+    t_min = mod_df["time_hours"].min()
+    mod_df["t_rel"] = mod_df["time_hours"] - t_min
+
+    # Pivot → time × channel, compute fleet median at each timestamp
+    pivot = mod_df.pivot_table(index="t_rel", columns="channel_index",
+                                values="voltage", aggfunc="mean")
+    fleet_median = pivot.median(axis=1)
+
+    t_vals = pivot.index.values
+    step = max(1, len(t_vals) // 1000)
+
+    for ch in channels:
+        if ch not in pivot.columns:
+            continue
+        dev_mv = (pivot[ch] - fleet_median).abs().values * 1000.0  # mV, numpy array
+        verdict = verdict_map.get(ch, "NORMAL")
+        lbl = label_map.get(ch, f"Ch{ch}")
+        color = _VERDICT_COLORS.get(verdict, "lightgray")
+        is_flagged = verdict in ("HIGH", "ELEVATED")
+        fig.add_trace(go.Scatter(
+            x=t_vals[::step],
+            y=dev_mv[::step],
+            mode="lines",
+            name=lbl,
+            line=dict(color=color, width=2.0 if is_flagged else 1.0),
+            opacity=1.0 if is_flagged else 0.45,
+            showlegend=is_flagged,
+        ))
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# 6. rank_chart  — M6 visualisation
+# ---------------------------------------------------------------------------
+
+def rank_chart(
+    result: AnalysisResult,
+    module_id: int,
+    rest_cell_df: Optional[pd.DataFrame] = None,
+) -> go.Figure:
+    """Rank percentile vs time for each cell in a module during rest.
+
+    A cell consistently at the bottom 20 % (dashed line) or trending
+    downward triggers M6. HIGH/ELEVATED verdicts are coloured.
+    """
+    fig = go.Figure()
+    fig.update_layout(
+        title=f"Module M{module_id} — Voltage Rank Percentile Over Rest (M6)",
+        xaxis_title="Time from rest start (h)",
+        yaxis_title="Rank percentile (%)",
+        template="plotly_white",
+    )
+    fig.add_hline(y=20.0, line_dash="dash", line_color="orange",
+                  annotation_text="20th pct threshold", annotation_position="right")
+
+    if rest_cell_df is None or rest_cell_df.empty:
+        fig.add_annotation(text="No rest data", showarrow=False,
+                           xref="paper", yref="paper", x=0.5, y=0.5)
+        return fig
+
+    topo = result.topology
+    channels = sorted(topo.channels_in_module(module_id))
+    mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
+    verdict_map: dict[int, str] = {}
+    label_map: dict[int, str] = {}
+    if mv is not None:
+        for cv in mv.all_cells:
+            verdict_map[cv.channel_index] = cv.verdict
+            label_map[cv.channel_index] = cv.label
+
+    mod_df = rest_cell_df[rest_cell_df["channel_index"].isin(channels)].copy()
+    if mod_df.empty:
+        return fig
+
+    t_min = mod_df["time_hours"].min()
+    mod_df["t_rel"] = mod_df["time_hours"] - t_min
+
+    pivot = mod_df.pivot_table(index="t_rel", columns="channel_index",
+                                values="voltage", aggfunc="mean")
+    rank_pct = pivot.rank(axis=1, pct=True, method="average") * 100.0
+
+    t_vals = rank_pct.index.values
+    step = max(1, len(t_vals) // 1000)
+
+    for ch in channels:
+        if ch not in rank_pct.columns:
+            continue
+        r_vals = rank_pct[ch].values
+        verdict = verdict_map.get(ch, "NORMAL")
+        lbl = label_map.get(ch, f"Ch{ch}")
+        color = _VERDICT_COLORS.get(verdict, "lightgray")
+        is_flagged = verdict in ("HIGH", "ELEVATED")
+        fig.add_trace(go.Scatter(
+            x=t_vals[::step],
+            y=r_vals[::step],
+            mode="lines",
+            name=lbl,
+            line=dict(color=color, width=2.0 if is_flagged else 1.0),
+            opacity=1.0 if is_flagged else 0.45,
+            showlegend=is_flagged,
+        ))
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# 7. phase_timeline
 # ---------------------------------------------------------------------------
 
 def phase_timeline(
