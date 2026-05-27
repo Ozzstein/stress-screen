@@ -316,12 +316,12 @@ def _run(args: argparse.Namespace) -> None:
         )
 
     # ------------------------------------------------------------------
-    # 5. Rest analysis (M1–M6)
+    # 5. Rest analysis (six detection methods)
     # ------------------------------------------------------------------
     v_low, v_high = CHEM_VOLTAGE_BOUNDS[args.chem]
     rest_params = RestParams(voltage_bounds=(v_low, v_high))
 
-    prog.stage(f"Running rest analysis (M1-M6) on {n_active} channels...")
+    prog.stage(f"Running rest analysis (6 detection methods) on {n_active} channels...")
     rest_results = run_rest_analysis(rest_cell_df, topology, params=rest_params)
 
     # ------------------------------------------------------------------

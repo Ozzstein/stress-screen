@@ -116,7 +116,7 @@ def run_isc_analysis(
             # Prefer M5 metadata when present (T_mean is computed there)
             T_mean_ch = np.nan
             m5_mr = next(
-                (mr for mr in rest_results[ch] if mr.method_name == "M5_temp_k"),
+                (mr for mr in rest_results[ch] if mr.method_name == "temp_k"),
                 None,
             )
             if m5_mr is not None:

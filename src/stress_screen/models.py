@@ -100,7 +100,7 @@ class Segment:
 class MethodResult:
     """One detection method's output for a single cell-group."""
 
-    method_name: str     # e.g. "M1_ocv_k", "M4_cusum", "li_plating"
+    method_name: str     # e.g. "ocv_k", "cusum", "li_plating"
     z_score: float
     verdict: Literal["HIGH", "ELEVATED", "NORMAL"]
     metadata: dict[str, Any]  # method-specific extras (e.g. {"k": 0.0023, "n_alarms": 5})

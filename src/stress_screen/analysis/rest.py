@@ -1,5 +1,7 @@
 """
-analysis/rest.py — M1–M6 OCV-rest detection methods for stress_screen.
+analysis/rest.py — Six OCV-rest detection methods for stress_screen.
+
+Methods: ocv_k, thermal_corr, spread, cusum, temp_k, rank.
 
 Each method operates on a single rest segment (post-settling) of the long-format
 cell voltage DataFrame and returns a MethodResult per channel.
@@ -140,7 +142,7 @@ def run_rest_analysis(
     topology: PackTopology,
     params: RestParams | None = None,
 ) -> dict[int, list[MethodResult]]:
-    """Run M1–M6 detection methods on rest-phase cell data.
+    """Run the six rest-phase detection methods on cell data.
 
     Parameters
     ----------
@@ -155,7 +157,7 @@ def run_rest_analysis(
     Returns
     -------
     dict mapping ``channel_index`` (int) to a list of six ``MethodResult``
-    objects (one per method, M1–M6).
+    objects (one per method: ocv_k, thermal_corr, spread, cusum, temp_k, rank).
     """
     if params is None:
         params = RestParams()
@@ -497,11 +499,11 @@ def run_rest_analysis(
 
         # M1
         if insufficient or np.isnan(m1_k.get(ch, np.nan)):
-            m1_res = _nan_result("M1_ocv_k", {"k": np.nan, "V_ocv": np.nan, "tau": np.nan})
+            m1_res = _nan_result("ocv_k", {"k": np.nan, "V_ocv": np.nan, "tau": np.nan})
         else:
             z1 = m1_z[ch]
             m1_res = MethodResult(
-                method_name="M1_ocv_k",
+                method_name="ocv_k",
                 z_score=z1,
                 verdict=_verdict(z1, params.z_thresh),
                 metadata={
@@ -513,11 +515,11 @@ def run_rest_analysis(
 
         # M2
         if insufficient:
-            m2_res = _nan_result("M2_thermal", {"pearson_r": np.nan})
+            m2_res = _nan_result("thermal_corr", {"pearson_r": np.nan})
         else:
             z2 = m2_z[ch]
             m2_res = MethodResult(
-                method_name="M2_thermal",
+                method_name="thermal_corr",
                 z_score=z2,
                 verdict=_verdict(z2, params.z_thresh),
                 metadata={"pearson_r": m2_r[ch]},
@@ -525,11 +527,11 @@ def run_rest_analysis(
 
         # M3
         if insufficient or np.isnan(m3_spread.get(ch, np.nan)):
-            m3_res = _nan_result("M3_spread", {"divergence_slope_v_per_h": np.nan})
+            m3_res = _nan_result("spread", {"divergence_slope_v_per_h": np.nan})
         else:
             z3 = m3_z[ch]
             m3_res = MethodResult(
-                method_name="M3_spread",
+                method_name="spread",
                 z_score=z3,
                 verdict=_verdict(z3, params.z_thresh),
                 metadata={"divergence_slope_v_per_h": m3_spread[ch]},
@@ -537,11 +539,11 @@ def run_rest_analysis(
 
         # M4
         if insufficient:
-            m4_res = _nan_result("M4_cusum", {"n_alarms": 0, "first_alarm_h": None})
+            m4_res = _nan_result("cusum", {"n_alarms": 0, "first_alarm_h": None})
         else:
             z4 = m4_z[ch]
             m4_res = MethodResult(
-                method_name="M4_cusum",
+                method_name="cusum",
                 z_score=z4,
                 verdict=_verdict(z4, params.z_thresh),
                 metadata={
@@ -553,13 +555,13 @@ def run_rest_analysis(
         # M5
         if insufficient or np.isnan(m5_k_corr.get(ch, np.nan)):
             m5_res = _nan_result(
-                "M5_temp_k",
+                "temp_k",
                 {"k_corrected": np.nan, "T_mean": np.nan, "temp_correction_applied": False},
             )
         else:
             z5 = m5_z[ch]
             m5_res = MethodResult(
-                method_name="M5_temp_k",
+                method_name="temp_k",
                 z_score=z5,
                 verdict=_verdict(z5, params.z_thresh),
                 metadata={
@@ -572,13 +574,13 @@ def run_rest_analysis(
         # M6
         if insufficient or np.isnan(m6_frac_bot20.get(ch, np.nan)):
             m6_res = _nan_result(
-                "M6_rank",
+                "rank",
                 {"mean_rank_pct": np.nan, "frac_bot20": np.nan, "rank_slope": np.nan},
             )
         else:
             z6 = m6_z[ch]
             m6_res = MethodResult(
-                method_name="M6_rank",
+                method_name="rank",
                 z_score=z6,
                 verdict=_verdict(z6, params.z_thresh),
                 metadata={

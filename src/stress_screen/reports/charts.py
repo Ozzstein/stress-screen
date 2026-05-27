@@ -420,7 +420,7 @@ def cell_detail_card(
     fig = make_subplots(
         rows=1,
         cols=3,
-        subplot_titles=["OCV (rest)", "CUSUM (M4)", "dQ/dV (charge)"],
+        subplot_titles=["OCV (rest)", "CUSUM (cusum method)", "dQ/dV (charge)"],
         horizontal_spacing=0.10,
     )
     fig.update_layout(
@@ -457,7 +457,7 @@ def cell_detail_card(
         cv = next((c for c in mv.all_cells if c.channel_index == channel_index), None)
         if cv is not None:
             m4_res = next(
-                (mr for mr in cv.method_results if mr.method_name == "M4_cusum"),
+                (mr for mr in cv.method_results if mr.method_name == "cusum"),
                 None,
             )
             if m4_res is not None and "cusum_pos" in m4_res.metadata:

@@ -26,7 +26,7 @@ def _make_rest_results_with_k(n_channels=8, k_values=None):
         k = k_values.get(ch, 0.0001)
         results[ch] = [
             MethodResult(
-                method_name="M1_ocv_k",
+                method_name="ocv_k",
                 z_score=0.0,
                 verdict="NORMAL",
                 metadata={"k": k, "V_ocv": 3.4, "tau": 1.0},

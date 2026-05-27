@@ -32,7 +32,7 @@ def test_m1_flags_high_k_cells():
     rest_df = _make_rest_cell_df(n_channels=16, bad_channels=bad, k_bad=0.003, rng=rng)
     topo = derive_topology(16, 1)  # 16 channels, 1 module -> 2P16S
     results = run_rest_analysis(rest_df, topo)
-    m1_verdicts = {ch: next(mr.verdict for mr in mrs if mr.method_name == "M1_ocv_k")
+    m1_verdicts = {ch: next(mr.verdict for mr in mrs if mr.method_name == "ocv_k")
                    for ch, mrs in results.items()}
     # Both bad channels should be HIGH
     for ch in bad:
@@ -49,8 +49,8 @@ def test_m5_arrhenius_vs_linear():
 
     checked = False
     for ch, mrs in results.items():
-        m1 = next((mr for mr in mrs if mr.method_name == "M1_ocv_k"), None)
-        m5 = next((mr for mr in mrs if mr.method_name == "M5_temp_k"), None)
+        m1 = next((mr for mr in mrs if mr.method_name == "ocv_k"), None)
+        m5 = next((mr for mr in mrs if mr.method_name == "temp_k"), None)
         if m1 is None or m5 is None:
             continue
         k_raw = m1.metadata.get("k", float("nan"))
@@ -96,10 +96,10 @@ def test_m6_slope_penalises_trending_cell():
     topo = derive_topology(n_channels, 1)
     results = run_rest_analysis(rest_df, topo)
 
-    m6_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "M6_rank")
+    m6_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "rank")
     # Only compare against stable middle channels (ch3–ch7); they have near-zero slope
     m6_z_stable = [
-        next(mr.z_score for mr in results[ch] if mr.method_name == "M6_rank")
+        next(mr.z_score for mr in results[ch] if mr.method_name == "rank")
         for ch in range(3, 8)
     ]
     assert m6_z_ch0 > float(np.nanmedian(m6_z_stable)) + 0.5, (
@@ -110,7 +110,7 @@ def test_m6_slope_penalises_trending_cell():
     # Verify the slope term is actually contributing — disable it and check ch0 z drops
     from stress_screen.analysis.rest import RestParams
     results_no_slope = run_rest_analysis(rest_df, topo, params=RestParams(m6_slope_weight=0.0))
-    m6_z_ch0_no_slope = next(mr.z_score for mr in results_no_slope[0] if mr.method_name == "M6_rank")
+    m6_z_ch0_no_slope = next(mr.z_score for mr in results_no_slope[0] if mr.method_name == "rank")
     assert m6_z_ch0 > m6_z_ch0_no_slope, (
         f"Slope term must be raising ch0 M6 z: with_slope={m6_z_ch0:.3f}, "
         f"no_slope={m6_z_ch0_no_slope:.3f}"
@@ -165,7 +165,7 @@ def test_m3_flags_drifting_cell_over_static_offset():
     rest_df = pd.DataFrame(rows)
     topo = derive_topology(n, 1)
     results = run_rest_analysis(rest_df, topo)
-    m3_z = {ch: next(mr.z_score for mr in results[ch] if mr.method_name == "M3_spread")
+    m3_z = {ch: next(mr.z_score for mr in results[ch] if mr.method_name == "spread")
             for ch in range(n)}
     assert m3_z[0] > m3_z[1], (
         f"Drifting ch0 M3 z={m3_z[0]:.3f} must exceed static-offset ch1 M3 z={m3_z[1]:.3f}"
@@ -192,8 +192,8 @@ def test_m3_noise_floor_prevents_false_high_on_healthy_fleet():
     rest_df = pd.DataFrame(rows)
     topo = derive_topology(n, 1)
     results = run_rest_analysis(rest_df, topo)
-    m3_verdict_ch0 = next(mr.verdict for mr in results[0] if mr.method_name == "M3_spread")
-    m3_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "M3_spread")
+    m3_verdict_ch0 = next(mr.verdict for mr in results[0] if mr.method_name == "spread")
+    m3_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "spread")
     assert m3_verdict_ch0 != "HIGH", (
         f"Noise-level 2 µV/h slope should not be HIGH; got verdict={m3_verdict_ch0}, z={m3_z_ch0:.2f}"
     )
@@ -228,13 +228,13 @@ def test_m3_temperature_gradient_not_flagged():
     results_with = run_rest_analysis(rest_df, topo, params=RestParams(dv_dt_coeff_mv_per_c=-0.2))
     results_without = run_rest_analysis(rest_df, topo, params=RestParams(dv_dt_coeff_mv_per_c=0.0))
 
-    z_with = next(mr.z_score for mr in results_with[0] if mr.method_name == "M3_spread")
-    z_without = next(mr.z_score for mr in results_without[0] if mr.method_name == "M3_spread")
+    z_with = next(mr.z_score for mr in results_with[0] if mr.method_name == "spread")
+    z_without = next(mr.z_score for mr in results_without[0] if mr.method_name == "spread")
 
     assert z_without > z_with, (
         f"T-compensation must reduce ch0 M3 z: without={z_without:.3f}, with={z_with:.3f}"
     )
-    verdict_with = next(mr.verdict for mr in results_with[0] if mr.method_name == "M3_spread")
+    verdict_with = next(mr.verdict for mr in results_with[0] if mr.method_name == "spread")
     assert verdict_with != "HIGH", (
         f"ch0 must not be HIGH after T-compensation, got {verdict_with} (z={z_with:.3f})"
     )
@@ -269,7 +269,7 @@ def test_m6_slope_cap_score_formula():
 
     cap_active_on_any = False
     for ch in range(n):
-        m6 = next(mr for mr in results[ch] if mr.method_name == "M6_rank")
+        m6 = next(mr for mr in results[ch] if mr.method_name == "rank")
         raw = m6.metadata.get("slope_contribution_raw", float("nan"))
         capped = m6.metadata.get("slope_contribution_capped", float("nan"))
         if np.isnan(raw):
