@@ -218,6 +218,28 @@ def active_channel_count(cell_df: pd.DataFrame) -> int:
     return cell_df["channel_index"].nunique()
 
 
+def _sensor_csv_channel(module_id: int, sensor_idx: int, config_name: str, series: int) -> int:
+    """Return the 0-based channel_index of the CSV column carrying sensor *k*
+    of *module_id*.
+
+    For 4P8S the CSV layout is **paired**: modules come in pairs (M1+M2),
+    (M3+M4), (M5+M6); each pair occupies 14 consecutive ``Cell_N_Temp``
+    columns followed by a 2-column structural gap (no sensor wired).
+
+        sensor k of module m  →  CSV column = ((m-1)//2)*16 + ((m-1)%2)*7 + k
+
+    For 1P32S and 2P16S the layout is sequential: ``(m-1)*series + k`` cells
+    per module with no gaps.
+    """
+    if config_name == "4P8S":
+        pair = (module_id - 1) // 2
+        pos_in_pair = (module_id - 1) % 2
+        csv_col = pair * 16 + pos_in_pair * 7 + sensor_idx  # 1-based
+        return csv_col - 1
+    # 1P32S, 2P16S: sequential layout
+    return (module_id - 1) * series + sensor_idx - 1
+
+
 def remap_temperatures(
     cell_df: pd.DataFrame,
     topology: "PackTopology",
@@ -225,9 +247,8 @@ def remap_temperatures(
     """Replace 1:1 Cell_N_Temp assignments with the staggered sensor mapping.
 
     In a 4P8S module, 7 physical sensors are placed between the 8 series
-    groups. The CSV stores each sensor reading in the ``Cell_N_Temp`` slot
-    that corresponds to its position in the module, but the correct group
-    temperature is the *average of the two sensors that bracket it*:
+    groups. Each group temperature is the *average of the two sensors that
+    bracket it*:
 
         G1 → sensor 1 only
         G2 → avg(sensor 1, sensor 2)
@@ -235,10 +256,12 @@ def remap_temperatures(
         G7 → avg(sensor 6, sensor 7)
         G8 → sensor 7 only
 
-    When a sensor slot is all-zeros in the CSV (disconnected sensor), it is
-    skipped and the group temperature falls back to the remaining valid
-    neighbour.  If all sensors for a group are dead the nearest valid sensor
-    in the same module is used as a last resort.
+    The CSV layout for 4P8S is paired: modules come in pairs and each pair
+    occupies 14 consecutive ``Cell_N_Temp`` columns plus a 2-column structural
+    gap. ``_sensor_csv_channel`` resolves the right column per sensor.
+
+    If a group's bracketing sensors are all NaN (dead hardware), the nearest
+    valid sensor in the same module is used as a last-resort fallback.
 
     Parameters
     ----------
@@ -255,13 +278,15 @@ def remap_temperatures(
     from stress_screen.models import PackTopology  # local import avoids cycle
 
     series = topology.series
+    config = topology.config_name
     result_df = cell_df.copy()
 
     all_channels = sorted(cell_df["channel_index"].unique())
 
     # Build per-channel position index and raw temperature arrays once.
-    ch_pos: dict[int, np.ndarray] = {}   # row positions in result_df
-    ch_temp: dict[int, np.ndarray] = {}  # raw temperature values
+    # ch_temp[ch] holds the raw value of Cell_(ch+1)_Temp from the CSV.
+    ch_pos: dict[int, np.ndarray] = {}
+    ch_temp: dict[int, np.ndarray] = {}
 
     for ch in all_channels:
         pos = np.where(result_df["channel_index"] == ch)[0]
@@ -278,9 +303,12 @@ def remap_temperatures(
                 continue
 
             sensor_indices = topology._temp_sensor_map.get((module_id, group_idx), [])
-            sensor_chs = [(module_id - 1) * series + k - 1 for k in sensor_indices]
+            sensor_chs = [
+                _sensor_csv_channel(module_id, k, config, series)
+                for k in sensor_indices
+            ]
 
-            # Average sensor readings; skip channels that are all-NaN (dead sensors)
+            # Average sensor readings; skip channels that are all-NaN (truly dead)
             valid = [
                 ch_temp[s] for s in sensor_chs
                 if s in ch_temp and not np.all(np.isnan(ch_temp[s]))
@@ -294,7 +322,6 @@ def remap_temperatures(
             result_df.iloc[ch_pos[target_ch], temp_col_idx] = new_t
 
     # --- Pass 2: fallback for groups whose sensors are ALL dead ---
-    # Refresh arrays after pass 1.
     for ch in all_channels:
         ch_temp[ch] = result_df["temperature"].values[ch_pos[ch]].astype(float)
 
