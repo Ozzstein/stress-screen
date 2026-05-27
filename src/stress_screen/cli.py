@@ -342,6 +342,7 @@ def _run(args: argparse.Namespace) -> None:
         charge_cell_df,
         top_charge_df=charge_top_df,
         n_parallel=topology.parallel,
+        topology=topology,
     )
 
     # ------------------------------------------------------------------

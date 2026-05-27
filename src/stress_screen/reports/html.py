@@ -20,10 +20,12 @@ from stress_screen.reports.charts import (
     cell_detail_card,
     divergence_chart,
     dv_dq_chart,
+    method_zscore_heatmap,
     ocv_fit_overlay,
     pack_heatmap,
     phase_timeline,
     rank_chart,
+    temperature_chart,
 )
 
 # ---------------------------------------------------------------------------
@@ -191,6 +193,8 @@ def write_html_report(
         dvdq_fig = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
         div_fig = divergence_chart(result, mid, rest_cell_df)
         rank_fig = rank_chart(result, mid, rest_cell_df)
+        temp_fig = temperature_chart(result, mid, rest_cell_df, charge_cell_df)
+        zscore_fig = method_zscore_heatmap(result, mid)
 
         # Flagged cell detail cards
         flagged_cells_data: list[dict[str, Any]] = []
@@ -257,6 +261,8 @@ def write_html_report(
                 "dvdq_chart": _render(dvdq_fig),
                 "divergence_chart": _render(div_fig),
                 "rank_chart": _render(rank_fig),
+                "temperature_chart": _render(temp_fig),
+                "zscore_heatmap": _render(zscore_fig),
                 "flagged_cells": flagged_cells_data,
                 "all_cells": all_cells_data,
                 "method_names": method_names,

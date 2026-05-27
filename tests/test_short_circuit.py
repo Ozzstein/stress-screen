@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from stress_screen.models import MethodResult
 from stress_screen.analysis.short_circuit import run_isc_analysis, ShortCircuitParams
+from stress_screen.topology import derive_topology
 
 
 def _make_isc_rest_df(n_channels=8, n_points=400):
@@ -165,6 +166,97 @@ def test_isc_aggregate_integration():
             assert len(isc_mrs) == 1, (
                 f"{cv.label}: expected exactly 1 isc result, got {len(isc_mrs)}"
             )
+
+
+def test_s2_module_ambient_drift_not_flagged():
+    """When all cells in a module warm together (ambient drift), the module-median
+    subtraction with topology must reduce each cell's adjusted S2 slope to ≈ 0,
+    even though the raw slope is elevated relative to a cooler module."""
+    n_channels = 16  # 2 modules of 8
+    n_points = 400
+    rng = np.random.default_rng(7)
+    rows = []
+    t = np.linspace(0, 8.0, n_points)
+    for ch in range(n_channels):
+        V = 3.4 + 0.05 * np.exp(-t / 2.0) - 1e-4 * t + rng.normal(0, 1e-4, n_points)
+        # Module 1 (ch 0-7): flat temperature
+        # Module 2 (ch 8-15): all warm together at 0.5 °C/h — pure ambient drift, no ISC
+        T = (20.0 + 0.5 * t if ch >= 8 else 20.0 * np.ones(n_points)) + rng.normal(0, 0.05, n_points)
+        for i in range(n_points):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+    rest_df = pd.DataFrame(rows)
+    rest_results = _make_rest_results_with_k(n_channels=n_channels)
+    charge_df = pd.DataFrame(columns=["time_hours", "channel_index", "voltage", "temperature"])
+    topo = derive_topology(n_channels, 2)  # 2 modules of 8
+
+    results_with = run_isc_analysis(rest_df, rest_results, charge_df, topology=topo)
+    results_without = run_isc_analysis(rest_df, rest_results, charge_df, topology=None)
+
+    # With topology: adjusted slope for module 2 cells ≈ raw - module_median ≈ 0
+    adj_slopes_m2 = [results_with[ch].metadata["s2_dT_dt_slope"] for ch in range(8, 16)]
+    raw_slopes_m2 = [results_with[ch].metadata["s2_dT_dt_raw_slope"] for ch in range(8, 16)]
+
+    # Raw slopes must be elevated (the ambient drift is real)
+    assert float(np.nanmedian(raw_slopes_m2)) > 0.1, (
+        f"Module 2 raw slopes should be elevated (median={np.nanmedian(raw_slopes_m2):.3f})"
+    )
+    # Adjusted slopes must be near zero (module-median subtracted)
+    assert abs(float(np.nanmedian(adj_slopes_m2))) < 0.05, (
+        f"Module 2 adjusted slopes should be ≈ 0 after module-median subtraction "
+        f"(median={np.nanmedian(adj_slopes_m2):.4f})"
+    )
+
+    # Without topology the module 2 cells have higher fleet z than with topology
+    z_with = [results_with[ch].metadata["s2_dT_dt_z"] for ch in range(8, 16)]
+    z_without = [results_without[ch].metadata["s2_dT_dt_z"] for ch in range(8, 16)]
+    assert float(np.nanmedian(z_with)) < float(np.nanmedian(z_without)), (
+        "Module-median subtraction (topology-aware) must reduce S2 z for uniformly-warming module"
+    )
+
+
+def test_s3_cold_temperature_reduces_z():
+    """Cold charge temperature must suppress S3 area-deficit z via the Arrhenius gate.
+
+    At 5°C (Ea=0.1 eV) the gate ≈ 0.75, so the gated z must be below the z
+    computed at the 25°C reference temperature.
+    """
+    rest_df = _make_isc_rest_df()
+    rest_results = _make_rest_results_with_k()
+    charge_df = _make_charge_df_for_isc()
+    top_charge_df = pd.DataFrame({
+        "time_hours": np.linspace(0, 2.0, 200),
+        "current": np.full(200, 5.0),
+    })
+
+    # Cold pack: overwrite charge temperature to 5°C
+    charge_cold = charge_df.copy()
+    charge_cold["temperature"] = 5.0
+
+    # Warm (reference) pack: 25°C → gate = 1.0
+    charge_warm = charge_df.copy()
+    charge_warm["temperature"] = 25.0
+
+    res_cold = run_isc_analysis(rest_df, rest_results, charge_cold, top_charge_df=top_charge_df)
+    res_warm = run_isc_analysis(rest_df, rest_results, charge_warm, top_charge_df=top_charge_df)
+
+    gate_cold = res_cold[4].metadata["s3_temperature_gate"]
+    gate_warm = res_warm[4].metadata["s3_temperature_gate"]
+
+    assert gate_cold < 1.0, (
+        f"Cold-pack Arrhenius gate={gate_cold:.3f} must be < 1.0 at 5°C (Ea=0.1 eV)"
+    )
+    assert abs(gate_warm - 1.0) < 0.05, (
+        f"Warm-pack gate={gate_warm:.3f} should be ≈ 1.0 at 25°C"
+    )
+
+    s3_cold = res_cold[4].metadata["s3_area_deficit_z"]
+    s3_warm = res_warm[4].metadata["s3_area_deficit_z"]
+
+    assert s3_cold < s3_warm, (
+        f"Cold-pack S3 z={s3_cold:.3f} must be < warm-pack S3 z={s3_warm:.3f} "
+        f"(Arrhenius gate suppresses cold cells)"
+    )
 
 
 def test_s1_temperature_confound_does_not_flag_warm_cell():

@@ -199,6 +199,47 @@ def test_m3_noise_floor_prevents_false_high_on_healthy_fleet():
     )
 
 
+def test_m3_temperature_gradient_not_flagged():
+    """A cell that progressively warms relative to its fleet-mates during rest must
+    NOT be flagged as HIGH by M3 when temperature compensation is enabled.
+
+    Without correction the growing temperature gap looks like accelerating
+    self-discharge (slope ≈ 125 µV/h); with −0.2 mV/°C compensation the
+    corrected voltage tracks the fleet and the divergence slope drops to ≈ 0.
+    """
+    rng = np.random.default_rng(12)
+    n = 8
+    t = np.linspace(0, 10.0, 500)
+    rows = []
+    for ch in range(n):
+        # ch0: starts +5°C above fleet and warms a further +5°C over 10 h.
+        # All cells have the same underlying self-discharge rate (1e-4 V/h).
+        # ch0's measured voltage is depressed by the OCV-temperature effect.
+        T = (25.0 + 5.0 + 0.625 * t) if ch == 0 else np.full(len(t), 25.0)
+        V_true = 3.4 + 0.05 * np.exp(-t / 2.0) - 1e-4 * t
+        V_measured = V_true - 0.0002 * (T - 25.0) + rng.normal(0, 5e-5, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": float(V_measured[i]),
+                         "temperature": float(T if np.isscalar(T) else T[i])})
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n, 1)
+
+    results_with = run_rest_analysis(rest_df, topo, params=RestParams(dv_dt_coeff_mv_per_c=-0.2))
+    results_without = run_rest_analysis(rest_df, topo, params=RestParams(dv_dt_coeff_mv_per_c=0.0))
+
+    z_with = next(mr.z_score for mr in results_with[0] if mr.method_name == "M3_spread")
+    z_without = next(mr.z_score for mr in results_without[0] if mr.method_name == "M3_spread")
+
+    assert z_without > z_with, (
+        f"T-compensation must reduce ch0 M3 z: without={z_without:.3f}, with={z_with:.3f}"
+    )
+    verdict_with = next(mr.verdict for mr in results_with[0] if mr.method_name == "M3_spread")
+    assert verdict_with != "HIGH", (
+        f"ch0 must not be HIGH after T-compensation, got {verdict_with} (z={z_with:.3f})"
+    )
+
+
 def test_m6_slope_cap_score_formula():
     """The cap must bound the raw slope contribution stored in M6 metadata.
 

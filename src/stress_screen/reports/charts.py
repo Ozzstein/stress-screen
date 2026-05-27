@@ -685,7 +685,149 @@ def rank_chart(
 
 
 # ---------------------------------------------------------------------------
-# 7. phase_timeline
+# 7. temperature_chart  — M2 / Li-plating / ISC S2 visualisation
+# ---------------------------------------------------------------------------
+
+def temperature_chart(
+    result: AnalysisResult,
+    module_id: int,
+    rest_cell_df: Optional[pd.DataFrame] = None,
+    charge_cell_df: Optional[pd.DataFrame] = None,
+) -> go.Figure:
+    """Two-panel temperature chart: rest phase (left) + charge phase (right).
+
+    Shows per-cell temperature vs time for a module. Helps interpret M2
+    (T–OCV correlation), ISC S2 (dT/dt anomaly), and Li-plating cold/heat
+    signatures. HIGH/ELEVATED cells coloured; others in gray.
+    """
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=["Temperature during rest", "Temperature during charge"],
+        horizontal_spacing=0.10,
+    )
+    fig.update_layout(
+        title=f"Module M{module_id} — Temperature (Rest & Charge)",
+        template="plotly_white",
+        height=380,
+    )
+
+    topo = result.topology
+    channels = sorted(topo.channels_in_module(module_id))
+    mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
+    verdict_map: dict[int, str] = {}
+    label_map: dict[int, str] = {}
+    if mv is not None:
+        for cv in mv.all_cells:
+            verdict_map[cv.channel_index] = cv.verdict
+            label_map[cv.channel_index] = cv.label
+
+    def _add_traces(df, col, x_title):
+        if df is None or df.empty or "temperature" not in df.columns:
+            fig.add_annotation(
+                text="No temperature data", showarrow=False,
+                xref=f"x{col} domain" if col > 1 else "x domain",
+                yref=f"y{col} domain" if col > 1 else "y domain",
+                x=0.5, y=0.5, row=1, col=col,
+            )
+            return
+        mod_df = df[df["channel_index"].isin(channels)].copy()
+        if mod_df.empty:
+            return
+        t_min = mod_df["time_hours"].min()
+        for ch in channels:
+            ch_df = mod_df[mod_df["channel_index"] == ch].sort_values("time_hours")
+            if ch_df.empty or ch_df["temperature"].isna().all():
+                continue
+            ch_df = _downsample_df(ch_df)
+            verdict = verdict_map.get(ch, "NORMAL")
+            lbl = label_map.get(ch, f"Ch{ch}")
+            color = _VERDICT_COLORS.get(verdict, "lightgray")
+            is_flagged = verdict in ("HIGH", "ELEVATED")
+            fig.add_trace(go.Scatter(
+                x=ch_df["time_hours"] - t_min,
+                y=ch_df["temperature"],
+                mode="lines",
+                name=lbl,
+                line=dict(color=color, width=2.0 if is_flagged else 1.0),
+                opacity=1.0 if is_flagged else 0.5,
+                showlegend=is_flagged and col == 1,
+                legendgroup=str(ch),
+            ), row=1, col=col)
+        fig.update_xaxes(title_text=x_title, row=1, col=col)
+        fig.update_yaxes(title_text="Temperature (°C)", row=1, col=col)
+
+    _add_traces(rest_cell_df, 1, "Time from rest start (h)")
+    _add_traces(charge_cell_df, 2, "Time from charge start (h)")
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# 8. method_zscore_heatmap  — all-methods overview
+# ---------------------------------------------------------------------------
+
+def method_zscore_heatmap(
+    result: AnalysisResult,
+    module_id: int,
+) -> go.Figure:
+    """Heatmap of method z-scores: rows = methods, columns = cell groups.
+
+    Gives a single at-a-glance view of every method's contribution for every
+    cell in a module. Z-scores clamped to [−3, 3]; colour scale runs from
+    green (healthy, z ≤ 0) through yellow (z = 1.5) to red (z ≥ 3).
+    """
+    mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
+    if mv is None or not mv.all_cells:
+        fig = go.Figure()
+        fig.add_annotation(text="No cell data", showarrow=False,
+                           xref="paper", yref="paper", x=0.5, y=0.5)
+        return fig
+
+    cells = sorted(mv.all_cells, key=lambda c: c.group_in_module)
+    x_labels = [c.label for c in cells]
+    method_names = [mr.method_name for mr in cells[0].method_results]
+
+    z_matrix: list[list[float]] = []
+    text_matrix: list[list[str]] = []
+    for mr_idx, mname in enumerate(method_names):
+        row_z: list[float] = []
+        row_txt: list[str] = []
+        for cv in cells:
+            mr = cv.method_results[mr_idx]
+            z = float(np.clip(mr.z_score, -3.0, 3.0)) if not np.isnan(mr.z_score) else 0.0
+            row_z.append(z)
+            z_str = f"{mr.z_score:.2f}" if not np.isnan(mr.z_score) else "—"
+            row_txt.append(f"{mr.verdict}<br>z={z_str}")
+        z_matrix.append(row_z)
+        text_matrix.append(row_txt)
+
+    colorscale = [
+        [0.0,  "rgb(0,180,0)"],
+        [0.50, "rgb(255,255,100)"],
+        [1.0,  "rgb(220,0,0)"],
+    ]
+
+    fig = go.Figure(go.Heatmap(
+        z=z_matrix,
+        x=x_labels,
+        y=[m.replace("_", " ") for m in method_names],
+        zmin=-3.0, zmax=3.0,
+        colorscale=colorscale,
+        colorbar=dict(title="Z-score", tickvals=[-3, -1.5, 0, 1.5, 3]),
+        text=text_matrix,
+        texttemplate="%{text}",
+        hovertemplate="Cell: %{x}<br>Method: %{y}<br>%{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=f"Module M{module_id} — All Method Z-Scores",
+        template="plotly_white",
+        height=max(300, 45 * len(method_names) + 120),
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# 9. phase_timeline
 # ---------------------------------------------------------------------------
 
 def phase_timeline(

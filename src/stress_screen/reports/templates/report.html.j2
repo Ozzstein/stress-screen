@@ -396,6 +396,14 @@
           <h4>Voltage Rank Percentile Over Rest — M6</h4>
           {{ mod.rank_chart | safe }}
         </div>
+        <div class="chart-box">
+          <h4>Temperature — Rest &amp; Charge Phases (M2 / ISC S2 / Li-plating)</h4>
+          {{ mod.temperature_chart | safe }}
+        </div>
+        <div class="chart-box" style="grid-column: 1 / -1;">
+          <h4>All Method Z-Scores — Complete Analysis Overview</h4>
+          {{ mod.zscore_heatmap | safe }}
+        </div>
       </div>
 
       {% if mod.all_cells %}

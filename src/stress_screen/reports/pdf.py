@@ -36,10 +36,12 @@ from stress_screen.models import AnalysisResult
 from stress_screen.reports.charts import (
     divergence_chart,
     dv_dq_chart,
+    method_zscore_heatmap,
     ocv_fit_overlay,
     pack_heatmap,
     phase_timeline,
     rank_chart,
+    temperature_chart,
 )
 
 
@@ -311,10 +313,11 @@ def _pages_per_module(
     top_charge_df: "pd.DataFrame | None" = None,
     n_parallel: int = 1,
 ) -> list:
-    """Four charts across two pages for each module.
+    """Six charts across three pages for each module.
 
-    Page 1: OCV relaxation overlay + Voltage divergence (M3)
-    Page 2: dQ/dV incremental capacity + Rank percentile (M6)
+    Page 1: OCV relaxation + M3 divergence (rest-phase voltage)
+    Page 2: dQ/dV + M6 rank percentile (charge + rank)
+    Page 3: Temperature (rest & charge) + All-method z-score heatmap
     """
     flowables = []
     usable_w = page_w - 2 * margin
@@ -323,28 +326,33 @@ def _pages_per_module(
     for mv in result.module_verdicts:
         mid = mv.module_id
 
-        # --- Page 1: rest-phase charts ---
+        # --- Page 1: rest-phase voltage charts ---
         flowables.append(Paragraph(f"Module M{mid} — Rest Phase Analysis", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
-
-        fig_ocv = ocv_fit_overlay(result, mid, rest_cell_df)
-        flowables.append(_fig_to_image(fig_ocv, usable_w, chart_h))
+        flowables.append(_fig_to_image(ocv_fit_overlay(result, mid, rest_cell_df), usable_w, chart_h))
         flowables.append(Spacer(1, 0.3 * cm))
-
-        fig_div = divergence_chart(result, mid, rest_cell_df)
-        flowables.append(_fig_to_image(fig_div, usable_w, chart_h))
+        flowables.append(_fig_to_image(divergence_chart(result, mid, rest_cell_df), usable_w, chart_h))
         flowables.append(PageBreak())
 
         # --- Page 2: charge-phase + rank charts ---
         flowables.append(Paragraph(f"Module M{mid} — Charge Phase &amp; Rank Analysis", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
-
-        fig_dvdq = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
-        flowables.append(_fig_to_image(fig_dvdq, usable_w, chart_h))
+        flowables.append(_fig_to_image(
+            dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel),
+            usable_w, chart_h,
+        ))
         flowables.append(Spacer(1, 0.3 * cm))
+        flowables.append(_fig_to_image(rank_chart(result, mid, rest_cell_df), usable_w, chart_h))
+        flowables.append(PageBreak())
 
-        fig_rank = rank_chart(result, mid, rest_cell_df)
-        flowables.append(_fig_to_image(fig_rank, usable_w, chart_h))
+        # --- Page 3: temperature + method z-score overview ---
+        flowables.append(Paragraph(f"Module M{mid} — Temperature &amp; Method Overview", styles["h2"]))
+        flowables.append(Spacer(1, 0.2 * cm))
+        flowables.append(_fig_to_image(
+            temperature_chart(result, mid, rest_cell_df, charge_cell_df), usable_w, chart_h,
+        ))
+        flowables.append(Spacer(1, 0.3 * cm))
+        flowables.append(_fig_to_image(method_zscore_heatmap(result, mid), usable_w, chart_h))
         flowables.append(PageBreak())
 
     return flowables

@@ -91,6 +91,18 @@ class RestParams:
     Only slopes meaningfully above this level will escalate toward HIGH.
     """
 
+    dv_dt_coeff_mv_per_c: float = -0.2
+    """OCV temperature coefficient (mV/°C) used to compensate M3 and M6 for
+    within-module thermal gradients before computing fleet-relative metrics.
+
+    A cell that is warmer than its module-mates naturally has a slightly lower
+    OCV (for LFP the coefficient is approximately −0.2 to −0.4 mV/°C in the
+    flat plateau region). Without correction, a 5°C gradient produces ~1 mV
+    of apparent divergence that M3 and M6 would misread as self-discharge.
+    Set to 0.0 to disable temperature compensation (e.g., when temperature
+    data is unreliable or absent).
+    """
+
 
 # ---------------------------------------------------------------------------
 # Verdict helper
@@ -261,6 +273,25 @@ def run_rest_analysis(
         index="_t_rel", columns="channel_index", values="voltage"
     )
 
+    # Temperature-compensated voltage pivot for M3 and M6.
+    # Subtracts the expected OCV offset due to each cell's temperature
+    # deviation from the fleet median at each time step.
+    # V_adj = V - (dV/dT) * (T_cell - T_fleet_median)
+    # NaN temperatures → zero correction for that cell/timestep.
+    has_temp_col = "temperature" in settled_df.columns
+    if has_temp_col and params.dv_dt_coeff_mv_per_c != 0.0:
+        pivot_t: pd.DataFrame = settled_df.pivot_table(
+            index="_t_rel", columns="channel_index", values="temperature"
+        )
+        # Reindex to match pivot_v (same time axis)
+        pivot_t = pivot_t.reindex(pivot_v.index)
+        T_fleet_med = pivot_t.median(axis=1)
+        T_excess = pivot_t.sub(T_fleet_med, axis=0)  # deviation from fleet median
+        dv_dt_v = params.dv_dt_coeff_mv_per_c / 1000.0  # convert mV/°C → V/°C
+        pivot_v_adj: pd.DataFrame = pivot_v - dv_dt_v * T_excess
+    else:
+        pivot_v_adj = pivot_v
+
     # ------------------------------------------------------------------ #
     # M2 — Temperature–OCV residual correlation                            #
     # ------------------------------------------------------------------ #
@@ -300,12 +331,12 @@ def run_rest_analysis(
     # ------------------------------------------------------------------ #
     m3_spread: dict[int, float] = {}
 
-    if not pivot_v.empty:
-        fleet_med = pivot_v.median(axis=1)
-        t_index = pivot_v.index.values  # _t_rel in hours
+    if not pivot_v_adj.empty:
+        fleet_med_adj = pivot_v_adj.median(axis=1)
+        t_index = pivot_v_adj.index.values  # _t_rel in hours
         for ch in channels:
-            if ch in pivot_v.columns and chan_data[ch]["n_set"] >= params.min_points:
-                deviation_abs = np.abs((pivot_v[ch] - fleet_med).values)
+            if ch in pivot_v_adj.columns and chan_data[ch]["n_set"] >= params.min_points:
+                deviation_abs = np.abs((pivot_v_adj[ch] - fleet_med_adj).values)
                 valid = ~np.isnan(deviation_abs)
                 if valid.sum() >= 5:
                     slope_dev, *_ = _stats.linregress(t_index[valid], deviation_abs[valid])
@@ -399,8 +430,8 @@ def run_rest_analysis(
     m6_rank_slope: dict[int, float] = {}
     m6_t_span: dict[int, float] = {}
 
-    if not pivot_v.empty:
-        rank_pct = pivot_v.rank(axis=1, pct=True, method="average") * 100.0
+    if not pivot_v_adj.empty:
+        rank_pct = pivot_v_adj.rank(axis=1, pct=True, method="average") * 100.0
 
         for ch in channels:
             if ch in rank_pct.columns and chan_data[ch]["n_set"] >= params.min_points:
