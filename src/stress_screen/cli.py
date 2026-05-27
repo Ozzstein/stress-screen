@@ -206,7 +206,7 @@ def main() -> None:
 def _run(args: argparse.Namespace) -> None:
     """Execute the full pipeline; separated from main() for clean error wrapping."""
     from stress_screen._progress import get as get_progress
-    from stress_screen.loader import load_csv, active_channel_count
+    from stress_screen.loader import load_csv, active_channel_count, remap_temperatures
     from stress_screen.topology import derive_topology
     from stress_screen.segmentation import segment, rest_segments, charge_segments
     from stress_screen.analysis.rest import run_rest_analysis, RestParams
@@ -245,6 +245,11 @@ def _run(args: argparse.Namespace) -> None:
         f"({topology.parallel} parallel x {topology.series} series), "
         f"{topology.module_count} modules"
     )
+
+    # Apply staggered sensor mapping: each group temperature is the average
+    # of the sensors that bracket it (per temp_mapping.yaml), replacing the
+    # raw 1:1 Cell_N_Temp assignment from the loader.
+    cell_df = remap_temperatures(cell_df, topology)
 
     # ------------------------------------------------------------------
     # 3. Segment

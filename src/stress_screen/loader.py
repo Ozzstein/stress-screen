@@ -218,6 +218,101 @@ def active_channel_count(cell_df: pd.DataFrame) -> int:
     return cell_df["channel_index"].nunique()
 
 
+def remap_temperatures(
+    cell_df: pd.DataFrame,
+    topology: "PackTopology",
+) -> pd.DataFrame:
+    """Replace 1:1 Cell_N_Temp assignments with the staggered sensor mapping.
+
+    In a 4P8S module, 7 physical sensors are placed between the 8 series
+    groups. The CSV stores each sensor reading in the ``Cell_N_Temp`` slot
+    that corresponds to its position in the module, but the correct group
+    temperature is the *average of the two sensors that bracket it*:
+
+        G1 → sensor 1 only
+        G2 → avg(sensor 1, sensor 2)
+        ...
+        G7 → avg(sensor 6, sensor 7)
+        G8 → sensor 7 only
+
+    When a sensor slot is all-zeros in the CSV (disconnected sensor), it is
+    skipped and the group temperature falls back to the remaining valid
+    neighbour.  If all sensors for a group are dead the nearest valid sensor
+    in the same module is used as a last resort.
+
+    Parameters
+    ----------
+    cell_df:
+        Long-format cell DataFrame as returned by ``load_csv``.
+    topology:
+        Pack topology produced by ``derive_topology``; must contain the
+        ``_temp_sensor_map`` populated from ``temp_mapping.yaml``.
+
+    Returns
+    -------
+    A copy of *cell_df* with the ``temperature`` column corrected.
+    """
+    from stress_screen.models import PackTopology  # local import avoids cycle
+
+    series = topology.series
+    result_df = cell_df.copy()
+
+    all_channels = sorted(cell_df["channel_index"].unique())
+
+    # Build per-channel position index and raw temperature arrays once.
+    ch_pos: dict[int, np.ndarray] = {}   # row positions in result_df
+    ch_temp: dict[int, np.ndarray] = {}  # raw temperature values
+
+    for ch in all_channels:
+        pos = np.where(result_df["channel_index"] == ch)[0]
+        ch_pos[ch] = pos
+        ch_temp[ch] = result_df["temperature"].values[pos].astype(float)
+
+    temp_col_idx = result_df.columns.get_loc("temperature")
+
+    # --- Pass 1: apply staggered sensor mapping ---
+    for module_id in range(1, topology.module_count + 1):
+        for group_idx in range(1, series + 1):
+            target_ch = (module_id - 1) * series + group_idx - 1
+            if target_ch not in ch_pos:
+                continue
+
+            sensor_indices = topology._temp_sensor_map.get((module_id, group_idx), [])
+            sensor_chs = [(module_id - 1) * series + k - 1 for k in sensor_indices]
+
+            # Average sensor readings; skip channels that are all-NaN (dead sensors)
+            valid = [
+                ch_temp[s] for s in sensor_chs
+                if s in ch_temp and not np.all(np.isnan(ch_temp[s]))
+            ]
+
+            if valid:
+                new_t = np.nanmean(np.column_stack(valid), axis=1)
+            else:
+                new_t = np.full(len(ch_pos[target_ch]), np.nan)
+
+            result_df.iloc[ch_pos[target_ch], temp_col_idx] = new_t
+
+    # --- Pass 2: fallback for groups whose sensors are ALL dead ---
+    # Refresh arrays after pass 1.
+    for ch in all_channels:
+        ch_temp[ch] = result_df["temperature"].values[ch_pos[ch]].astype(float)
+
+    for module_id in range(1, topology.module_count + 1):
+        module_chs = [
+            ch for ch in range((module_id - 1) * series, module_id * series)
+            if ch in ch_pos
+        ]
+        valid_chs = [ch for ch in module_chs if not np.all(np.isnan(ch_temp[ch]))]
+
+        for target_ch in module_chs:
+            if np.all(np.isnan(ch_temp[target_ch])) and valid_chs:
+                nearest = min(valid_chs, key=lambda x: abs(x - target_ch))
+                result_df.iloc[ch_pos[target_ch], temp_col_idx] = ch_temp[nearest]
+
+    return result_df
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
