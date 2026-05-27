@@ -98,7 +98,10 @@ def aggregate(
         n_high = sum(1 for z in valid_z if z >= z_thresh)
 
         # 4. Cell verdict
-        if n_high >= 2 or composite_z > 2.0:
+        # n_high >= 2 only escalates to HIGH when composite evidence also
+        # crosses the ELEVATED floor (≥ 1.0).  Without this gate, two methods
+        # barely above z_thresh can overrule six methods saying NORMAL.
+        if composite_z > 2.0 or (n_high >= 2 and composite_z >= 1.0):
             verdict = "HIGH"
         elif n_high >= 1 or composite_z > 1.0:
             verdict = "ELEVATED"

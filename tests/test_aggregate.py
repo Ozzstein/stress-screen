@@ -146,18 +146,24 @@ def test_module_marginal_verdict_for_elevated_only_real():
 
 
 def test_module_nok_overrides_marginal_when_any_high():
-    """Any HIGH cell still produces NOK regardless of how many MARGINAL cells."""
+    """Any HIGH cell still produces NOK regardless of how many MARGINAL cells.
+
+    Uses 4 methods at z=2.5 so that composite_z = (4*2.5)/7 ≈ 1.43 ≥ 1.0
+    and n_high=4 ≥ 2 — satisfying both conditions of the n_high gate.
+    """
     n = 8
     rest_results = {}
     li_results = {}
     for ch in range(n):
         if ch == 0:
-            # Two methods at z=3 → composite > 2 → HIGH
+            # 4 methods above z_thresh, composite_z = 4*2.5/7 ≈ 1.43 → HIGH
             rest_results[ch] = [
-                MethodResult("M1", 3.0, "HIGH", metadata={}),
-                MethodResult("M2", 3.0, "HIGH", metadata={}),
-            ] + [
-                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(2, 6)
+                MethodResult("M1", 2.5, "HIGH", metadata={}),
+                MethodResult("M2", 2.5, "HIGH", metadata={}),
+                MethodResult("M3", 2.5, "HIGH", metadata={}),
+                MethodResult("M4", 2.5, "HIGH", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
             ]
         elif ch == 1:
             rest_results[ch] = [
@@ -177,3 +183,40 @@ def test_module_nok_overrides_marginal_when_any_high():
     topo = derive_topology(n, 1)
     verdicts = aggregate(rest_results, li_results, topo)
     assert verdicts[0].verdict == "NOK", f"Expected NOK with HIGH cell, got {verdicts[0].verdict}"
+
+
+def test_two_borderline_high_methods_with_low_composite_z_is_elevated_not_nok():
+    """Two methods barely above z_thresh but composite_z < 1.0 must be ELEVATED.
+
+    This guards against two weakly-firing methods overruling five methods
+    saying NORMAL.  composite_z = (2.1 + 2.1 + 0*5) / 7 ≈ 0.60 < 1.0.
+    """
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            rest_results[ch] = [
+                MethodResult("M1", 2.1, "HIGH", metadata={}),
+                MethodResult("M2", 2.1, "HIGH", metadata={}),
+                MethodResult("M3", 0.0, "NORMAL", metadata={}),
+                MethodResult("M4", 0.0, "NORMAL", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.verdict == "ELEVATED", (
+        f"Two borderline HIGH methods with composite_z={ch0_cv.composite_z:.2f} < 1.0 "
+        f"should be ELEVATED, not {ch0_cv.verdict}"
+    )
+    assert verdicts[0].verdict == "MARGINAL", (
+        f"Module with only ELEVATED cells should be MARGINAL, got {verdicts[0].verdict}"
+    )
