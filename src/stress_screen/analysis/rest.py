@@ -328,6 +328,21 @@ def run_rest_analysis(
     r_z_arr = robust_z(r_abs_arr)
     m2_z: dict[int, float] = {ch: float(r_z_arr[i]) for i, ch in enumerate(channels)}
 
+    # Edge-cell noise penalty:
+    # G1 and G8 of each module are covered by a single un-averaged temperature
+    # sensor, whereas G2-G7 are the mean of two sensors (√2 noise reduction).
+    # Without this correction the higher-noise edge cells systematically yield
+    # inflated |r| and z, producing structural false positives.  We deflate
+    # the z by 1/√n_sensors so cells with fewer sensors face a higher
+    # effective threshold.
+    sqrt2 = float(np.sqrt(2.0))
+    for ch in channels:
+        module_id = topology.module_for_channel(ch)
+        group_idx = topology.group_index_in_module(ch)
+        n_sensors = len(topology._temp_sensor_map.get((module_id, group_idx), []))
+        if n_sensors == 1 and not np.isnan(m2_z[ch]):
+            m2_z[ch] = m2_z[ch] / sqrt2
+
     # ------------------------------------------------------------------ #
     # M3 — Slope of |V_cell − V_fleet_median| (divergence rate)            #
     # ------------------------------------------------------------------ #

@@ -220,3 +220,70 @@ def test_two_borderline_high_methods_with_low_composite_z_is_elevated_not_nok():
     assert verdicts[0].verdict == "MARGINAL", (
         f"Module with only ELEVATED cells should be MARGINAL, got {verdicts[0].verdict}"
     )
+
+
+def test_single_borderline_high_with_low_composite_is_normal_not_elevated():
+    """One method just above z_thresh with composite < 0.5 is NORMAL.
+
+    Guard against single-method threshold trips driving false ELEVATED.
+    composite_z = (2.1 + 0*6) / 7 ≈ 0.30 < 0.5.
+    """
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            rest_results[ch] = [
+                MethodResult("M1", 2.1, "HIGH", metadata={}),
+                MethodResult("M2", 0.0, "NORMAL", metadata={}),
+                MethodResult("M3", 0.0, "NORMAL", metadata={}),
+                MethodResult("M4", 0.0, "NORMAL", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.verdict == "NORMAL", (
+        f"Single borderline HIGH with composite_z={ch0_cv.composite_z:.2f} < 0.5 "
+        f"should be NORMAL, not {ch0_cv.verdict}"
+    )
+
+
+def test_single_high_with_moderate_composite_is_elevated():
+    """One HIGH method with composite >= 0.5 produces ELEVATED.
+
+    Boundary check: composite = (2.5 + 1.0 + 1.0 + 0*4) / 7 ≈ 0.64 > 0.5.
+    """
+    n = 8
+    rest_results = {}
+    li_results = {}
+    for ch in range(n):
+        if ch == 0:
+            rest_results[ch] = [
+                MethodResult("M1", 2.5, "HIGH", metadata={}),
+                MethodResult("M2", 1.0, "ELEVATED", metadata={}),
+                MethodResult("M3", 1.0, "ELEVATED", metadata={}),
+                MethodResult("M4", 0.0, "NORMAL", metadata={}),
+                MethodResult("M5", 0.0, "NORMAL", metadata={}),
+                MethodResult("M6", 0.0, "NORMAL", metadata={}),
+            ]
+        else:
+            rest_results[ch] = [
+                MethodResult(f"M{i+1}", 0.0, "NORMAL", metadata={}) for i in range(6)
+            ]
+        li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL", metadata={})
+
+    topo = derive_topology(n, 1)
+    verdicts = aggregate(rest_results, li_results, topo)
+    ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
+    assert ch0_cv.verdict == "ELEVATED", (
+        f"n_high=1 + composite_z={ch0_cv.composite_z:.2f} ≥ 0.5 should be ELEVATED, "
+        f"got {ch0_cv.verdict}"
+    )

@@ -287,3 +287,42 @@ def test_m6_slope_cap_score_formula():
     assert cap_active_on_any, (
         "No channel had raw_slope_contrib > cap — increase drift or lower cap"
     )
+
+
+def test_thermal_corr_edge_cell_penalty():
+    """Single-sensor cells (G1, G8) get a 1/√2 penalty on thermal_corr z to
+    correct for their structurally higher temperature-measurement noise.
+
+    Setup: 16 cells (2 modules of 8). Inject identical T-V coupling on every
+    cell. Without the penalty all 16 cells get z ≈ 0. The penalty deflates
+    the four single-sensor cells (ch 0, 7, 8, 15) so their final z is lower
+    than the interior cells by a factor of √2.
+    """
+    n = 16
+    rng = np.random.default_rng(20260528)
+    t = np.linspace(2.5, 30.0, 500)
+
+    rows = []
+    for ch in range(n):
+        T = 25.0 + 0.5 * np.sin(2 * np.pi * t / 12.0) + rng.normal(0, 0.02, len(t))
+        # Identical T-V coupling on every cell so the raw |r| is similar
+        V = 3.40 - 1e-4 * t - 0.0005 * (T - 25.0) + rng.normal(0, 3e-5, len(t))
+        for i in range(len(t)):
+            rows.append({"time_hours": t[i], "channel_index": ch,
+                         "voltage": V[i], "temperature": T[i]})
+
+    rest_df = pd.DataFrame(rows)
+    topo = derive_topology(n, 2)  # 2 modules of 8 → 4P8S
+    results = run_rest_analysis(rest_df, topo)
+
+    edge_channels = {0, 7, 8, 15}  # G1, G8 of each module
+    edge_z = [next(mr.z_score for mr in results[ch] if mr.method_name == "thermal_corr")
+              for ch in edge_channels]
+    interior_z = [next(mr.z_score for mr in results[ch] if mr.method_name == "thermal_corr")
+                  for ch in range(n) if ch not in edge_channels]
+
+    # Edge cells should have lower |z| than interior cells on average
+    assert np.nanmean(np.abs(edge_z)) < np.nanmean(np.abs(interior_z)) * 0.85, (
+        f"Edge-cell |z|={np.nanmean(np.abs(edge_z)):.3f} should be substantially "
+        f"lower than interior-cell |z|={np.nanmean(np.abs(interior_z)):.3f}"
+    )
