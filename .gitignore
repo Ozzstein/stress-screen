@@ -19,11 +19,22 @@ env/
 
 # Jupyter
 .ipynb_checkpoints/
+*.ipynb
 
 # Data files
 *.csv
 *.xlsx
 ~$*
+
+# Generated reports
+*_report.html
+*_report.pdf
+
+# Local tool settings
+.claude/
+
+# In-flight planning artefacts (kept locally)
+docs/superpowers/
 
 # OS
 .DS_Store
