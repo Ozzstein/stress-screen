@@ -76,9 +76,14 @@ def _print_header(result_csv: Path, topo, segments) -> None:
     )
 
 
-def _print_verdicts(module_verdicts, verbose: bool = False) -> None:
-    """Print one line per module, and optionally per-method z-scores."""
-    print()
+def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False) -> None:
+    """Print one line per module, and optionally per-method z-scores.
+
+    When ``quiet`` is True, prints only the per-module verdict lines (no
+    leading/trailing blank lines, no summary count).
+    """
+    if not quiet:
+        print()
     for mv in module_verdicts:
         # Build the flagged cells portion with method detail
         if mv.verdict == "NOK" and mv.flagged_cells:
@@ -107,6 +112,9 @@ def _print_verdicts(module_verdicts, verbose: bool = False) -> None:
                 for mr in fc.method_results:
                     z_str = f"{mr.z_score:.3f}" if mr.z_score == mr.z_score else "NaN"
                     print(f"      {mr.method_name:20s}  z={z_str:>8s}  [{mr.verdict}]")
+
+    if quiet:
+        return
 
     print()
     nok_count = sum(1 for m in module_verdicts if m.verdict == "NOK")
@@ -178,7 +186,8 @@ def main() -> None:
     p.add_argument(
         "--quiet", "-q",
         action="store_true",
-        help="Suppress progress output to stderr",
+        help="Print only the per-module verdict lines; suppress progress, "
+             "header, summary, and report-path messages.",
     )
     args = p.parse_args()
 
@@ -366,8 +375,9 @@ def _run(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     # 8. Terminal output
     # ------------------------------------------------------------------
-    _print_header(csv_path, topology, segments)
-    _print_verdicts(module_verdicts, verbose=args.verbose)
+    if not args.quiet:
+        _print_header(csv_path, topology, segments)
+    _print_verdicts(module_verdicts, verbose=args.verbose, quiet=args.quiet)
 
     # ------------------------------------------------------------------
     # 9. Reports
@@ -382,7 +392,8 @@ def _run(args: argparse.Namespace) -> None:
         prog.stage(f"Writing HTML report -> {html_path}")
         write_html_report(result, rest_cell_df, charge_cell_df, top_df, html_path,
                           top_charge_df=charge_top_df, n_parallel=topology.parallel)
-        print(f"HTML report: {html_path}")
+        if not args.quiet:
+            print(f"HTML report: {html_path}")
 
     if not args.no_pdf:
         from stress_screen.reports.pdf import write_pdf_report
@@ -390,7 +401,8 @@ def _run(args: argparse.Namespace) -> None:
         prog.stage(f"Writing PDF report -> {pdf_path}")
         write_pdf_report(result, rest_cell_df, charge_cell_df, top_df, pdf_path,
                          top_charge_df=charge_top_df, n_parallel=topology.parallel)
-        print(f"PDF report:  {pdf_path}")
+        if not args.quiet:
+            print(f"PDF report:  {pdf_path}")
 
     prog.stage("Done.")
 
