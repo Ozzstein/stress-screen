@@ -21,7 +21,7 @@ from stress_screen.models import Segment
 
 I_REST = 0.5        # A — |current| below this → rest (when sustained)
 I_ACTIVE = 1.0      # A — |current| above this → active (charge or discharge)
-REST_MIN_HOURS = 30.0  # minimum duration to label a segment as "rest"
+REST_MIN_HOURS = 48.0  # protocol requirement — see README "Test protocol requirements"
 
 
 # ---------------------------------------------------------------------------
@@ -112,10 +112,15 @@ def segment(
     # Step 3 — post-process: re-label short rest candidates as
     #           "transition", then merge consecutive same-phase segments
     # ------------------------------------------------------------------
+    # Track the longest rest candidate before relabeling so the warning
+    # can report the actual rest duration the user has, not 0.0 h.
+    longest_rest_candidate_h = 0.0
     processed: list[tuple[str, int, int]] = []
     for phase, sr, er in candidates:
         if phase == "rest":
             duration = time_h.iat[er] - time_h.iat[sr]
+            if duration > longest_rest_candidate_h:
+                longest_rest_candidate_h = duration
             if duration < rest_min_hours:
                 phase = "transition"
         processed.append((phase, sr, er))
@@ -194,14 +199,16 @@ def segment(
     # ------------------------------------------------------------------
     # Step 5 — sanity warning
     # ------------------------------------------------------------------
-    max_rest = max(
-        (s.duration_h for s in segments if s.phase == "rest"),
-        default=0.0,
-    )
-    if max_rest < 24.0:
+    # Report the longest rest *candidate* (the actual continuous low-current
+    # span seen in the data), not the longest segment still labelled "rest"
+    # after the >= rest_min_hours filter — otherwise the warning shows 0.0 h
+    # whenever the file is being rejected for short rest.
+    if longest_rest_candidate_h < rest_min_hours:
         warnings.warn(
-            f"No rest segment >= 24 h found (longest rest = {max_rest:.1f} h). "
-            "Check that the data contains a complete rest period.",
+            f"No rest segment >= {rest_min_hours:.0f} h found "
+            f"(longest rest = {longest_rest_candidate_h:.1f} h). The "
+            f"stress-test protocol requires a final rest period of at least "
+            f"{rest_min_hours:.0f} h.",
             stacklevel=2,
         )
 

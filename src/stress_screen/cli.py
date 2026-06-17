@@ -292,7 +292,11 @@ def _run(args: argparse.Namespace) -> None:
     charge_segs = charge_segments(segments)
 
     if not rest_segs:
-        raise ValueError("No rest segment found in data. Cannot run OCV analysis.")
+        raise ValueError(
+            "Test invalidated: no rest segment >= 48 h found in the data. "
+            "The stress-test protocol requires a final rest period of at "
+            "least 48 h for OCV analysis."
+        )
 
     # Use the longest rest segment for OCV analysis
     longest_rest = rest_segs[0]

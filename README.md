@@ -132,6 +132,22 @@ TimeStamp;Current;Voltage;SOC %;Warning;Fault;Cell_1_Volt;Cell_1_Temp;Cell_2_Vol
 - The number of active voltage channels divided by the `_M<n>` count from the filename determines the topology (4P8S, 2P16S, or 1P32S).
 - Disconnected temperature sensors should read `0` — the loader treats those as NaN.
 
+## Test protocol requirements
+
+`stress_screen` enforces one hard precondition on the input data:
+
+- **The test must contain a final rest period of at least 48 hours** during which `|current| < 0.5 A`.
+
+This is a protocol requirement, not a tuneable parameter. Without 48 h of rest, OCV self-discharge slopes cannot be resolved above measurement noise and any verdict the tool produces would be unreliable. Files that fail this check are rejected with:
+
+```
+Error: Test invalidated: no rest segment >= 48 h found in the data. The
+stress-test protocol requires a final rest period of at least 48 h for
+OCV analysis.
+```
+
+The process exits with code `2`. Re-run the test with a longer rest cycle.
+
 ## Temperature sensor layout (4P8S)
 
 Each 4P8S module has 7 physical sensors placed *between* the 8 series cell-groups, plus a structural 2-column gap between every pair of modules in the CSV. Sensor `k` of module `m` is read from CSV column:

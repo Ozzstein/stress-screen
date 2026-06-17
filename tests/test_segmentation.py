@@ -15,8 +15,8 @@ def _make_top_df(currents: list, dt_h: float = 1.0/3600) -> pd.DataFrame:
     })
 
 def test_basic_segmentation():
-    # charge 2h, discharge 2h, rest 40h
-    currents = [10.0] * 7200 + [-10.0] * 7200 + [0.0] * 144000
+    # charge 2h, discharge 2h, rest 50h (must exceed the 48 h REST_MIN_HOURS floor)
+    currents = [10.0] * 7200 + [-10.0] * 7200 + [0.0] * 180000
     top = _make_top_df(currents)
     segs = segment(top)
     phases = [s.phase for s in segs]
@@ -24,11 +24,12 @@ def test_basic_segmentation():
     assert "rest" in phases
 
 def test_rest_duration():
-    currents = [10.0] * 7200 + [0.0] * 144000
+    # charge 2h, rest 50h
+    currents = [10.0] * 7200 + [0.0] * 180000
     top = _make_top_df(currents)
     segs = segment(top)
     rs = rest_segments(segs)
-    assert rs[0].duration_h > 35.0
+    assert rs[0].duration_h > 48.0
 
 def test_empty_dataframe():
     top = _make_top_df([])
