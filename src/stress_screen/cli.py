@@ -184,12 +184,17 @@ def main() -> None:
         help="Show per-method z-scores",
     )
     p.add_argument(
-        "--quiet", "-q",
+        "--full",
         action="store_true",
-        help="Print only the per-module verdict lines; suppress progress, "
-             "header, summary, and report-path messages.",
+        help="Print the full output (pack header, progress messages, "
+             "result summary, and report-path lines). By default only the "
+             "per-module verdict lines are printed.",
     )
     args = p.parse_args()
+
+    # Default behaviour is terse: only per-module verdict lines. Pass --full
+    # to opt into the legacy header + summary + report-path output.
+    args.quiet = not args.full
 
     from stress_screen._progress import set_quiet
     set_quiet(args.quiet)

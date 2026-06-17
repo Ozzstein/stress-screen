@@ -57,41 +57,40 @@ Python ≥ 3.10 is required.
 stress_screen DataLogging_C1_I01_P18052026_M6.csv
 ```
 
-Default output:
+Default output is terse — only the per-module verdict lines:
 
 ```
+M1: MARGINAL  [cells elevated: M1/G1 (ELEVATED)]
+M2: OK
+M3: OK
+M4: MARGINAL  [cells elevated: M4/G8 (ELEVATED)]
+M5: OK
+M6: OK
+```
+
+HTML and PDF reports are still written to the input CSV's directory (use `--no-html` / `--no-pdf` to skip).
+
+### Full output (pack header, progress, summary, report paths)
+
+```bash
+stress_screen <csv> --full
+```
+
+```
+[1.0s] Loading CSV...
+[71.6s] Loaded 238136 rows, 48 active channels
+...
 Pack: DataLogging_C1_I01_P18052026_M6.csv
 Configuration: 6 modules, 4P8S (4 parallel × 8 series), 48 active cell-groups
 Segments: 3 charge, 2 discharge, 1 rest (longest rest: 54.10 h)
 
 M1: MARGINAL  [cells elevated: M1/G1 (ELEVATED)]
-M2: OK
-M3: OK
-M4: MARGINAL  [cells elevated: M4/G8 (ELEVATED)]
-M5: OK
-M6: OK
+... (verdict lines)
 
 Result: 2 of 6 modules MARGINAL
 HTML report: /path/to/DataLogging_C1_I01_P18052026_M6_report.html
 PDF report:  /path/to/DataLogging_C1_I01_P18052026_M6_report.pdf
 ```
-
-### Terse output (verdict lines only)
-
-```bash
-stress_screen <csv> --quiet
-```
-
-```
-M1: MARGINAL  [cells elevated: M1/G1 (ELEVATED)]
-M2: OK
-M3: OK
-M4: MARGINAL  [cells elevated: M4/G8 (ELEVATED)]
-M5: OK
-M6: OK
-```
-
-Useful for CI checks or piping into scripts.
 
 ### Verbose output (per-method z-scores for flagged cells)
 
@@ -105,7 +104,7 @@ Adds a block under each flagged cell showing every method's z-score and verdict.
 
 ```
 stress_screen [-h] [--chem {lfp,nmc,nca}] [--mapping PATH] [--out-dir DIR]
-              [--no-html] [--no-pdf] [--downsample N] [-v] [-q] CSV
+              [--no-html] [--no-pdf] [--downsample N] [-v] [--full] CSV
 ```
 
 | Flag | Default | Description |
@@ -118,7 +117,7 @@ stress_screen [-h] [--chem {lfp,nmc,nca}] [--mapping PATH] [--out-dir DIR]
 | `--no-pdf` | off | Skip PDF report generation. |
 | `--downsample N` | `1` (no downsampling) | Keep every Nth row. Use `1` for production runs — see *Downsampling caveats* below. |
 | `-v`, `--verbose` | off | Show per-method z-scores under each flagged cell. |
-| `-q`, `--quiet` | off | Print only per-module verdict lines. |
+| `--full` | off | Print pack header, progress messages, result summary, and report paths in addition to the verdict lines. |
 
 ## Input CSV format
 
