@@ -1,6 +1,6 @@
 # stress-screen
 
-Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight independent detection methods over the rest and conditioning-charge phases and produces a per-module **OK / MARGINAL / NOK** verdict plus an HTML and PDF report.
+Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight independent detection methods over the rest and conditioning-charge phases and produces a per-module **OK / OK - Marginal / NOK** verdict plus an HTML and PDF report.
 
 The screener is designed to catch the early-stage degradation modes that matter in pack qualification — self-discharge drift, thermal-coupled voltage drift, lithium plating signatures, and internal short circuits — without flagging the structural noise that comes from sensor placement and module-to-module temperature gradients.
 
@@ -30,7 +30,7 @@ Each cell becomes:
 Modules roll up as:
 
 - **NOK** if any cell is HIGH
-- **MARGINAL** if any cell is ELEVATED
+- **OK - Marginal** if any cell is ELEVATED
 - **OK** otherwise
 
 Process exit code is `1` if any module is NOK, `0` otherwise.
@@ -60,10 +60,10 @@ stress_screen DataLogging_C1_I01_P18052026_M6.csv
 Default output is terse — only the per-module verdict lines:
 
 ```
-M1: MARGINAL  [cells elevated: M1/G1 (ELEVATED)]
+M1: OK - Marginal  [cells elevated: M1/G1 (ELEVATED)]
 M2: OK
 M3: OK
-M4: MARGINAL  [cells elevated: M4/G8 (ELEVATED)]
+M4: OK - Marginal  [cells elevated: M4/G8 (ELEVATED)]
 M5: OK
 M6: OK
 ```
@@ -84,10 +84,10 @@ Pack: DataLogging_C1_I01_P18052026_M6.csv
 Configuration: 6 modules, 4P8S (4 parallel × 8 series), 48 active cell-groups
 Segments: 3 charge, 2 discharge, 1 rest (longest rest: 54.10 h)
 
-M1: MARGINAL  [cells elevated: M1/G1 (ELEVATED)]
+M1: OK - Marginal  [cells elevated: M1/G1 (ELEVATED)]
 ... (verdict lines)
 
-Result: 2 of 6 modules MARGINAL
+Result: 2 of 6 modules OK - Marginal
 HTML report: /path/to/DataLogging_C1_I01_P18052026_M6_report.html
 PDF report:  /path/to/DataLogging_C1_I01_P18052026_M6_report.pdf
 ```

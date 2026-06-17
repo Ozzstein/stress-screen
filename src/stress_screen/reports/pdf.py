@@ -151,8 +151,9 @@ def _page1_title(result: AnalysisResult, styles: dict) -> list:
         verdict_text = f"NOK: {nok_ids}"
         verdict_style = styles["verdict_nok"]
     elif marginal_modules:
+        from stress_screen.models import MARGINAL_DISPLAY
         marginal_ids = ", ".join(f"M{m.module_id}" for m in marginal_modules)
-        verdict_text = f"MARGINAL: {marginal_ids}"
+        verdict_text = f"{MARGINAL_DISPLAY}: {marginal_ids}"
         verdict_style = styles["verdict_marginal"]
     else:
         verdict_text = "ALL OK"
@@ -211,9 +212,11 @@ def _page2_module_table(result: AnalysisResult, styles: dict) -> list:
                     methods_fired.add(mr.method_name)
         methods_str = ", ".join(sorted(methods_fired)) if methods_fired else "—"
 
+        from stress_screen.models import MARGINAL_DISPLAY
+        verdict_label = MARGINAL_DISPLAY if mv.verdict == "MARGINAL" else mv.verdict
         data.append([
             f"M{mv.module_id}",
-            mv.verdict,
+            verdict_label,
             flagged,
             methods_str,
         ])

@@ -314,7 +314,7 @@
         {% if overall_verdict == "NOK" %}
           <span class="verdict-nok">NOK</span>
         {% elif overall_verdict == "MARGINAL" %}
-          <span class="verdict-marginal">MARGINAL</span>
+          <span class="verdict-marginal">OK - Marginal</span>
         {% else %}
           <span class="verdict-ok">OK</span>
         {% endif %}
@@ -399,7 +399,7 @@
         (<code>n_methods_HIGH ≥ 2</code> AND <code>composite_z ≥ 1.0</code>);
         <code>ELEVATED</code> when <code>n_methods_HIGH ≥ 1</code> or <code>composite_z &gt; 1.0</code>;
         otherwise <code>NORMAL</code>.
-        A module is <strong>NOK</strong> if any cell is HIGH, <strong>MARGINAL</strong> if any cell is ELEVATED, else <strong>OK</strong>.
+        A module is <strong>NOK</strong> if any cell is HIGH, <strong>OK - Marginal</strong> if any cell is ELEVATED, else <strong>OK</strong>.
       </div>
     </div>
   </section>
@@ -427,7 +427,7 @@
               {% if row.verdict == "NOK" %}
                 <span class="verdict-nok">NOK</span>
               {% elif row.verdict == "MARGINAL" %}
-                <span class="verdict-marginal">MARGINAL</span>
+                <span class="verdict-marginal">OK - Marginal</span>
               {% else %}
                 <span class="verdict-ok">OK</span>
               {% endif %}
@@ -488,7 +488,7 @@
         {% if mod.verdict == "NOK" %}
           <span class="badge badge-nok">NOK</span>
         {% elif mod.verdict == "MARGINAL" %}
-          <span class="badge badge-marginal">MARGINAL</span>
+          <span class="badge badge-marginal">OK - Marginal</span>
         {% else %}
           <span class="badge badge-ok">OK</span>
         {% endif %}

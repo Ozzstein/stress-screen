@@ -116,6 +116,8 @@ def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False)
     if quiet:
         return
 
+    from stress_screen.models import MARGINAL_DISPLAY
+
     print()
     nok_count = sum(1 for m in module_verdicts if m.verdict == "NOK")
     marginal_count = sum(1 for m in module_verdicts if m.verdict == "MARGINAL")
@@ -123,11 +125,11 @@ def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False)
     if nok_count == 0 and marginal_count == 0:
         print(f"Result: all {total} modules OK")
     elif nok_count == 0:
-        print(f"Result: {marginal_count} of {total} modules MARGINAL")
+        print(f"Result: {marginal_count} of {total} modules {MARGINAL_DISPLAY}")
     elif marginal_count == 0:
         print(f"Result: {nok_count} of {total} modules NOK")
     else:
-        print(f"Result: {nok_count} of {total} modules NOK, {marginal_count} MARGINAL")
+        print(f"Result: {nok_count} of {total} modules NOK, {marginal_count} {MARGINAL_DISPLAY}")
 
 
 # ---------------------------------------------------------------------------

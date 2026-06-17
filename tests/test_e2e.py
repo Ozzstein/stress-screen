@@ -38,7 +38,8 @@ def test_e2e_cli():
         lines = result.stdout
         module_count = int(re.search(r"_M(\d+)\b", csv.name).group(1))
         for i in range(1, module_count + 1):
-            assert re.search(rf"^M{i}:\s+(OK|MARGINAL|NOK)", lines, re.MULTILINE), \
+            # Display strings: "OK", "OK - Marginal", "NOK"
+            assert re.search(rf"^M{i}:\s+(OK( - Marginal)?|NOK)", lines, re.MULTILINE), \
                 f"Missing M{i} verdict line in output for {csv.name}"
         return  # success
 
