@@ -51,6 +51,68 @@ uv sync
 
 Python ≥ 3.10 is required.
 
+## Download the pre-built binary (no Python install required)
+
+Every release publishes stand-alone executables for Windows, macOS, and Linux to the [Releases page](https://github.com/Ozzstein/stress-screen/releases/latest). Nothing to install — download the file for your OS and run it.
+
+| Platform | Asset | How to use |
+|---|---|---|
+| Windows 10 / 11 (x64) | `stress_screen-windows-x64.exe` | Drop into any folder, double-click Command Prompt in that folder, run `stress_screen-windows-x64.exe your-file.csv` |
+| macOS (Apple Silicon) | `stress_screen-macos-arm64` | `chmod +x stress_screen-macos-arm64 && ./stress_screen-macos-arm64 your-file.csv` |
+| Linux (x64) | `stress_screen-linux-x64` | `chmod +x stress_screen-linux-x64 && ./stress_screen-linux-x64 your-file.csv` |
+
+### Windows quick start
+
+1. Download `stress_screen-windows-x64.exe` from the Releases page.
+2. (Optional but recommended) rename it to `stress_screen.exe` for shorter commands.
+3. Place it in the folder that contains your tester CSV, e.g. `C:\Tests\`.
+4. Open Command Prompt (`Win + R` → type `cmd` → Enter), then:
+   ```
+   cd C:\Tests
+   stress_screen.exe DataLogging_C1_I01_P18052026_M6.csv
+   ```
+5. You'll see the per-module verdict lines. An HTML report and a PDF report are written next to your CSV file.
+
+Common Windows commands:
+
+```cmd
+REM Only verdict lines, no reports:
+stress_screen.exe my_test.csv --no-html --no-pdf
+
+REM Full output (progress, header, summary):
+stress_screen.exe my_test.csv --full
+
+REM Verbose z-scores for every flagged cell:
+stress_screen.exe my_test.csv -v
+
+REM Send results to a specific output folder:
+stress_screen.exe my_test.csv --out-dir C:\Reports\
+```
+
+### macOS / Linux quick start
+
+```bash
+# One-time: make the file executable
+chmod +x stress_screen-macos-arm64        # or stress_screen-linux-x64
+
+# Run it
+./stress_screen-macos-arm64 DataLogging_C1_I01_P18052026_M6.csv
+```
+
+### First-time on Windows: SmartScreen warning
+
+Because the binary isn't signed with a Microsoft-issued code-signing certificate, Windows SmartScreen may show *"Windows protected your PC"* the first time you run it. Click **More info → Run anyway**. This is standard for unsigned open-source binaries.
+
+### First-time on macOS: Gatekeeper warning
+
+macOS may block the binary with *"cannot be opened because the developer cannot be verified"*. Fix it once with:
+
+```bash
+xattr -d com.apple.quarantine stress_screen-macos-arm64
+```
+
+Or right-click the file → *Open* → *Open* to bypass the warning through the GUI.
+
 ## Quick start
 
 ```bash
