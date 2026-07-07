@@ -8,7 +8,8 @@ dependencies = [
     "scipy>=1.11",
     "pyyaml>=6.0",
     "plotly>=5.18",
-    "kaleido>=0.2,<0.3",
+    # 0.2.1.post1 ships only an armv7l Linux wheel — unusable on macOS/Windows
+    "kaleido>=0.2,<0.3,!=0.2.1.post1",
     "reportlab>=4.0",
     "jinja2>=3.1",
     "tqdm>=4.65",
@@ -16,6 +17,9 @@ dependencies = [
 
 [project.scripts]
 stress_screen = "stress_screen.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]
