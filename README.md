@@ -1,12 +1,12 @@
 # stress-screen
 
-Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight independent detection methods over the rest and conditioning-charge phases and produces a per-module **OK / OK - Marginal / NOK** verdict plus an HTML and PDF report.
+Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight detection methods over the rest and conditioning-charge phases, aggregates them into five evidence clusters, and produces a per-module **OK / OK - Marginal / NOK** verdict plus HTML/PDF reports and a machine-readable JSON result.
 
 The screener is designed to catch the early-stage degradation modes that matter in pack qualification — self-discharge drift, thermal-coupled voltage drift, lithium plating signatures, and internal short circuits — without flagging the structural noise that comes from sensor placement and module-to-module temperature gradients.
 
 ## What it detects
 
-Each cell-group is scored independently by eight methods. Method z-scores are robust (median / MAD) and aggregated into a confidence-weighted **composite z**.
+Each cell-group is scored by eight methods. Method z-scores are robust (median / MAD) and aggregated cluster-wise into the **composite z** (see *Composite: evidence clusters* below).
 
 | Method | What it measures | Detects |
 |---|---|---|

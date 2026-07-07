@@ -49,3 +49,5 @@ Thumbs.db
 /*_result.json
 /*_report.html
 /*_report.pdf
+.venv
+.venv.nosync/

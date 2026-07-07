@@ -392,13 +392,25 @@
       </div>
 
       <div class="verdict-rules">
-        <strong>Verdict aggregation:</strong>
-        each cell's composite z is the confidence-weighted mean of all method z-scores.
+        <strong>Verdict aggregation (evidence clusters):</strong>
+        the eight methods are grouped into five evidence clusters —
+        <code>self_discharge</code> (ocv_k, temp_k),
+        <code>residual_dynamics</code> (thermal_corr, cusum),
+        <code>fleet_divergence</code> (spread, rank),
+        <code>li_plating</code>, and <code>isc</code> —
+        because cluster members are redundant readings of the same physical
+        signal, not independent measurements. Member z-scores are averaged
+        within their cluster, each cluster score is winsorized to ±8, and the
+        cell's composite z is the weighted mean of the cluster scores.
         A cell becomes <code>HIGH</code> when either
         <code>composite_z &gt; 2.0</code> or
-        (<code>n_methods_HIGH ≥ 2</code> AND <code>composite_z ≥ 1.0</code>);
-        <code>ELEVATED</code> when <code>n_methods_HIGH ≥ 1</code> or <code>composite_z &gt; 1.0</code>;
+        (<code>n_clusters_HIGH ≥ 2</code> AND <code>composite_z ≥ 1.0</code>);
+        <code>ELEVATED</code> when
+        <code>composite_z &gt; 1.0</code> or
+        (<code>n_clusters_HIGH ≥ 1</code> AND <code>composite_z ≥ 0.5</code>);
         otherwise <code>NORMAL</code>.
+        (<code>n_clusters_HIGH</code> counts clusters at z ≥ 2.0 — twin
+        methods firing together count as one vote, not two.)
         A module is <strong>NOK</strong> if any cell is HIGH, <strong>OK - Marginal</strong> if any cell is ELEVATED, else <strong>OK</strong>.
       </div>
     </div>
