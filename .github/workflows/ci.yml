@@ -14,6 +14,9 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ['3.10', '3.11']
     runs-on: ${{ matrix.os }}
+    # Kaleido on Windows runners occasionally hangs; never let a stuck job
+    # burn hours of runner time.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
