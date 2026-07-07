@@ -132,16 +132,10 @@ def _page1_title(result: AnalysisResult, styles: dict) -> list:
 
     # Verdict summary
     nok_modules = [m for m in result.module_verdicts if m.verdict == "NOK"]
-    marginal_modules = [m for m in result.module_verdicts if m.verdict == "MARGINAL"]
     if nok_modules:
         nok_ids = ", ".join(f"M{m.module_id}" for m in nok_modules)
         verdict_text = f"NOK: {nok_ids}"
         verdict_style = styles["verdict_nok"]
-    elif marginal_modules:
-        from stress_screen.models import MARGINAL_DISPLAY
-        marginal_ids = ", ".join(f"M{m.module_id}" for m in marginal_modules)
-        verdict_text = f"{MARGINAL_DISPLAY}: {marginal_ids}"
-        verdict_style = styles["verdict_marginal"]
     else:
         verdict_text = "ALL OK"
         verdict_style = styles["verdict_ok"]
@@ -164,12 +158,7 @@ def _page1_title(result: AnalysisResult, styles: dict) -> list:
     # Brief per-module summary lines below the verdict
     flowables.append(Spacer(1, 1 * cm))
     for mv in result.module_verdicts:
-        if mv.verdict == "OK":
-            color = "#1a7a1a"
-        elif mv.verdict == "MARGINAL":
-            color = "#b8860b"
-        else:
-            color = "#cc0000"
+        color = "#1a7a1a" if mv.verdict == "OK" else "#cc0000"
         flowables.append(
             Paragraph(
                 f'<font color="{color}">{mv.summary_line}</font>',
@@ -199,21 +188,14 @@ def _page2_module_table(result: AnalysisResult, styles: dict) -> list:
                     methods_fired.add(mr.method_name)
         methods_str = ", ".join(sorted(methods_fired)) if methods_fired else "—"
 
-        from stress_screen.models import MARGINAL_DISPLAY
-        verdict_label = MARGINAL_DISPLAY if mv.verdict == "MARGINAL" else mv.verdict
         data.append([
             f"M{mv.module_id}",
-            verdict_label,
+            mv.verdict,
             flagged,
             methods_str,
         ])
 
-        if mv.verdict == "OK":
-            bg = colors.HexColor("#d4edda")
-        elif mv.verdict == "MARGINAL":
-            bg = colors.HexColor("#fff3cd")
-        else:
-            bg = colors.HexColor("#f8d7da")
+        bg = colors.HexColor("#d4edda" if mv.verdict == "OK" else "#f8d7da")
         row_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), bg))
 
     col_widths = [2.5 * cm, 2.5 * cm, 8 * cm, 8 * cm]

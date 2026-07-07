@@ -113,9 +113,9 @@ def test_composite_default_confidence_is_unity():
     )
 
 
-def test_module_marginal_verdict_for_elevated_only_real():
+def test_module_nok_for_elevated_only_cells():
     """A module with at least one ELEVATED cell (composite_z > 1.0, no method >= 2.0)
-    and no HIGH cells should be MARGINAL."""
+    and no HIGH cells is NOK — the module verdict is binary (strict policy)."""
     n = 8
     rest_results = {}
     li_results = {}
@@ -144,8 +144,8 @@ def test_module_marginal_verdict_for_elevated_only_real():
     assert ch0_cv.verdict == "ELEVATED", (
         f"Setup sanity: ch0 should be ELEVATED. Got {ch0_cv.verdict}, composite_z={ch0_cv.composite_z:.3f}"
     )
-    assert verdicts[0].verdict == "MARGINAL", (
-        f"Module with one ELEVATED cell expected MARGINAL, got {verdicts[0].verdict}"
+    assert verdicts[0].verdict == "NOK", (
+        f"Module with one ELEVATED cell expected NOK (binary strict), got {verdicts[0].verdict}"
     )
 
 
@@ -221,8 +221,9 @@ def test_two_borderline_high_methods_with_low_composite_z_is_elevated_not_nok():
         f"Two borderline HIGH methods with composite_z={ch0_cv.composite_z:.2f} < 1.0 "
         f"should be ELEVATED, not {ch0_cv.verdict}"
     )
-    assert verdicts[0].verdict == "MARGINAL", (
-        f"Module with only ELEVATED cells should be MARGINAL, got {verdicts[0].verdict}"
+    assert verdicts[0].verdict == "NOK", (
+        f"Module with only ELEVATED cells is NOK under the binary strict "
+        f"policy, got {verdicts[0].verdict}"
     )
 
 

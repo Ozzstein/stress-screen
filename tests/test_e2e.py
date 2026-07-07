@@ -34,7 +34,7 @@ def _run_cli(csv: Path, *extra: str):
 
 def _assert_verdict_lines(stdout: str, module_count: int, name: str):
     for i in range(1, module_count + 1):
-        assert re.search(rf"^M{i}:\s+(OK( - Marginal)?|NOK)", stdout, re.MULTILINE), \
+        assert re.search(rf"^M{i}:\s+(OK|NOK)", stdout, re.MULTILINE), \
             f"Missing M{i} verdict line in output for {name}"
 
 
@@ -49,7 +49,11 @@ def test_e2e_cli_synthetic(tmp_path):
 
 
 def test_e2e_cli_healthy_pack_exits_zero(tmp_path):
-    csv = make_synthetic_csv(tmp_path, leaky_channels=None)
+    # Tight leak spread: under the strict binary policy even one borderline
+    # ELEVATED cell fails a module, so the "healthy" fleet must be genuinely
+    # uniform to assert exit 0.
+    csv = make_synthetic_csv(tmp_path, leaky_channels=None,
+                             baseline_leak_mv_per_h=(0.03, 0.06))
     result = _run_cli(csv, "--no-html", "--no-pdf", "--no-json")
     assert result.returncode == 0, (
         f"Healthy synthetic pack should be all-OK.\n"

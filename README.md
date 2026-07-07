@@ -1,6 +1,6 @@
 # stress-screen
 
-Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight detection methods over the rest and conditioning-charge phases, aggregates them into five evidence clusters, and produces a per-module **OK / OK - Marginal / NOK** verdict plus HTML/PDF reports and a machine-readable JSON result.
+Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight detection methods over the rest and conditioning-charge phases, aggregates them into five evidence clusters, and produces a binary per-module **OK / NOK** verdict plus HTML/PDF reports and a machine-readable JSON result.
 
 The screener is designed to catch the early-stage degradation modes that matter in pack qualification — self-discharge drift, thermal-coupled voltage drift, lithium plating signatures, and internal short circuits — without flagging the structural noise that comes from sensor placement and module-to-module temperature gradients.
 
@@ -50,11 +50,9 @@ Each cell becomes:
 (`n_clusters_HIGH` counts clusters at z ≥ 2.0 — twin methods like `ocv_k` and
 `temp_k` firing together count as one vote, not two.)
 
-Modules roll up as:
-
-- **NOK** if any cell is HIGH
-- **OK - Marginal** if any cell is ELEVATED
-- **OK** otherwise
+The module verdict is binary (strict): **NOK** if any cell is HIGH **or**
+ELEVATED, **OK** otherwise. Cell-level HIGH/ELEVATED granularity is kept in
+the reports, JSON, and verbose output as diagnostics.
 
 Process exit code is `1` if any module is NOK, `0` otherwise.
 
@@ -145,10 +143,10 @@ stress_screen DataLogging_C1_I01_P18052026_M6.csv
 Default output is terse — only the per-module verdict lines:
 
 ```
-M1: OK - Marginal  [cells elevated: M1/G1 (ELEVATED)]
+M1: NOK  [cells flagged: M1/G1 (ELEVATED)]
 M2: OK
 M3: OK
-M4: OK - Marginal  [cells elevated: M4/G8 (ELEVATED)]
+M4: NOK  [cells flagged: M4/G8 (ELEVATED)]
 M5: OK
 M6: OK
 ```
@@ -169,10 +167,10 @@ Pack: DataLogging_C1_I01_P18052026_M6.csv
 Configuration: 6 modules, 4P8S (4 parallel × 8 series), 48 active cell-groups
 Segments: 3 charge, 2 discharge, 1 rest (longest rest: 54.10 h)
 
-M1: OK - Marginal  [cells elevated: M1/G1 (ELEVATED)]
+M1: NOK  [cells flagged: M1/G1 (ELEVATED)]
 ... (verdict lines)
 
-Result: 2 of 6 modules OK - Marginal
+Result: 2 of 6 modules NOK
 HTML report: /path/to/DataLogging_C1_I01_P18052026_M6_report.html
 PDF report:  /path/to/DataLogging_C1_I01_P18052026_M6_report.pdf
 ```

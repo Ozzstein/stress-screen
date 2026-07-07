@@ -82,14 +82,11 @@ def main(argv: list[str]) -> int:
                 v_new = _verdict(cz, cn, params)
                 cell_transitions[(v_old, v_new)] += 1
                 n_cells += 1
-                if v_old == "HIGH":
+                # Binary module rollup: any cell above NORMAL fails the module
+                if v_old in ("HIGH", "ELEVATED"):
                     old_module = "NOK"
-                elif v_old == "ELEVATED" and old_module != "NOK":
-                    old_module = "MARGINAL"
-                if v_new == "HIGH":
+                if v_new in ("HIGH", "ELEVATED"):
                     new_module = "NOK"
-                elif v_new == "ELEVATED" and new_module != "NOK":
-                    new_module = "MARGINAL"
             if old_module != new_module:
                 module_changes.append(
                     f"  {pack} M{module['module_id']}: {old_module} -> {new_module}"

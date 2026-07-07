@@ -313,8 +313,6 @@
       <span class="meta-value">
         {% if overall_verdict == "NOK" %}
           <span class="verdict-nok">NOK</span>
-        {% elif overall_verdict == "MARGINAL" %}
-          <span class="verdict-marginal">OK - Marginal</span>
         {% else %}
           <span class="verdict-ok">OK</span>
         {% endif %}
@@ -411,7 +409,8 @@
         otherwise <code>NORMAL</code>.
         (<code>n_clusters_HIGH</code> counts clusters at z ≥ 2.0 — twin
         methods firing together count as one vote, not two.)
-        A module is <strong>NOK</strong> if any cell is HIGH, <strong>OK - Marginal</strong> if any cell is ELEVATED, else <strong>OK</strong>.
+        The module verdict is binary: <strong>NOK</strong> if any cell is
+        HIGH or ELEVATED, else <strong>OK</strong>.
       </div>
     </div>
   </section>
@@ -438,8 +437,6 @@
             <td>
               {% if row.verdict == "NOK" %}
                 <span class="verdict-nok">NOK</span>
-              {% elif row.verdict == "MARGINAL" %}
-                <span class="verdict-marginal">OK - Marginal</span>
               {% else %}
                 <span class="verdict-ok">OK</span>
               {% endif %}
@@ -499,8 +496,6 @@
         Module M{{ mod.module_id }}
         {% if mod.verdict == "NOK" %}
           <span class="badge badge-nok">NOK</span>
-        {% elif mod.verdict == "MARGINAL" %}
-          <span class="badge badge-marginal">OK - Marginal</span>
         {% else %}
           <span class="badge badge-ok">OK</span>
         {% endif %}

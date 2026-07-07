@@ -33,12 +33,9 @@ def _fake_result(pack_id: str, cells_spec: list[tuple[int, int, str, float]]) ->
             ],
         })
     for m in modules.values():
-        if any(c["verdict"] == "HIGH" for c in m["cells"]):
-            m["verdict"] = "NOK"
-        elif any(c["verdict"] == "ELEVATED" for c in m["cells"]):
-            m["verdict"] = "MARGINAL"
-        else:
-            m["verdict"] = "OK"
+        # Binary module verdict, matching the real aggregation (strict)
+        any_flagged = any(c["verdict"] in ("HIGH", "ELEVATED") for c in m["cells"])
+        m["verdict"] = "NOK" if any_flagged else "OK"
     return {
         "schema_version": 2,
         "input": {"pack_id": pack_id, "csv_name": f"{pack_id}_D01012026_M2.csv"},

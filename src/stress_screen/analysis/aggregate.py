@@ -293,14 +293,11 @@ def aggregate(
         cells = [cell_verdicts[ch] for ch in module_channels if ch in cell_verdicts]
         cells.sort(key=lambda cv: cv.group_in_module)
 
-        flagged_cells = [cv for cv in cells if cv.verdict == "HIGH"]
-        elevated_cells = [cv for cv in cells if cv.verdict == "ELEVATED"]
-        if flagged_cells:
-            verdict = "NOK"
-        elif elevated_cells:
-            verdict = "MARGINAL"
-        else:
-            verdict = "OK"
+        # Binary module verdict (strict): any cell above NORMAL — HIGH or
+        # ELEVATED — fails the module. Cell-level granularity is kept for
+        # diagnostics; the module-level answer is OK or NOK, nothing between.
+        flagged_cells = [cv for cv in cells if cv.verdict in ("HIGH", "ELEVATED")]
+        verdict = "NOK" if flagged_cells else "OK"
 
         module_verdicts.append(
             ModuleVerdict(

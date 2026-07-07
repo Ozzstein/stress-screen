@@ -137,19 +137,18 @@ class CellVerdict:
 # ModuleVerdict
 # ---------------------------------------------------------------------------
 
-#: Display label for the MARGINAL verdict in user-facing output.
-#: The internal enum value stays "MARGINAL" (so JSON, tests, and code
-#: comparisons are stable) — this constant is only for what humans see.
-MARGINAL_DISPLAY = "OK - Marginal"
-
-
 @dataclass
 class ModuleVerdict:
-    """Pass/fail verdict for an entire module."""
+    """Binary pass/fail verdict for an entire module.
+
+    Strict policy: any cell above NORMAL (HIGH or ELEVATED) fails the
+    module — there is no intermediate module verdict. Cell-level verdicts
+    keep the HIGH/ELEVATED distinction for diagnostics.
+    """
 
     module_id: int
-    verdict: Literal["OK", "MARGINAL", "NOK"]
-    flagged_cells: list[CellVerdict]   # only HIGH cells
+    verdict: Literal["OK", "NOK"]
+    flagged_cells: list[CellVerdict]   # cells above NORMAL (HIGH or ELEVATED)
     all_cells: list[CellVerdict]
 
     @property
@@ -158,17 +157,10 @@ class ModuleVerdict:
 
         Examples::
             "M3: OK"
-            "M3: OK - Marginal  [cells elevated: M3/G2 (ELEVATED)]"
-            "M3: NOK  [cells flagged: M3/G5 (HIGH), M3/G7 (HIGH)]"
+            "M3: NOK  [cells flagged: M3/G5 (HIGH), M3/G7 (ELEVATED)]"
         """
         if self.verdict == "OK":
             return f"M{self.module_id}: OK"
-        if self.verdict == "MARGINAL":
-            elevated = [c for c in self.all_cells if c.verdict == "ELEVATED"]
-            if not elevated:
-                return f"M{self.module_id}: {MARGINAL_DISPLAY}  [no elevated cells recorded]"
-            elevated_labels = ", ".join(f"{c.label} ({c.verdict})" for c in elevated)
-            return f"M{self.module_id}: {MARGINAL_DISPLAY}  [cells elevated: {elevated_labels}]"
         if not self.flagged_cells:
             return f"M{self.module_id}: NOK  [no flagged cells recorded]"
         flagged_labels = ", ".join(f"{c.label} ({c.verdict})" for c in self.flagged_cells)

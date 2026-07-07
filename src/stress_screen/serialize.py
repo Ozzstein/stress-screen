@@ -27,7 +27,7 @@ Schema (version 1)
                    "config_name": "4P8S", "active_channels": 48},
       "segments": [{"phase": "charge", "start_time_h": 0.0,
                     "end_time_h": 2.1, "duration_h": 2.1}, ...],
-      "verdict": {"overall": "OK|MARGINAL|NOK", "exit_code": 0},
+      "verdict": {"overall": "OK|NOK", "exit_code": 0},
       "modules": [
         {"module_id": 1, "verdict": "OK",
          "cells": [
@@ -59,7 +59,10 @@ import numpy as np
 
 from stress_screen.models import AnalysisResult
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+# v3: module and overall verdicts are binary (OK | NOK) — the MARGINAL
+#     value no longer exists; any cell above NORMAL fails its module.
+#     Cell verdicts keep HIGH/ELEVATED/NORMAL for diagnostics.
 # v2 (additive): per-cell "cluster_scores" and "composite_z_legacy";
 #     "composite_z" is the official (mode-selected) composite.
 # v1: initial schema.
@@ -182,8 +185,7 @@ def result_to_dict(
         input_section.update(_jsonable(run_info))
 
     topo = result.topology
-    any_marginal = any(m.verdict == "MARGINAL" for m in result.module_verdicts)
-    overall = "NOK" if result.any_nok else ("MARGINAL" if any_marginal else "OK")
+    overall = "NOK" if result.any_nok else "OK"
 
     modules = []
     for mv in result.module_verdicts:

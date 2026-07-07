@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
-  "tool_version": "0.1.0",
-  "generated_at": "2026-07-07T13:08:41.725233+00:00",
+  "schema_version": 3,
+  "tool_version": "0.2.0",
+  "generated_at": "2026-07-07T13:56:10.226752+00:00",
   "input": {
     "csv_name": "SynthPack_D01032026_080000_M2.csv",
-    "csv_path": "/private/var/folders/q8/2z6j2xz95sd5qh5v3qm27c7m0000gn/T/pytest-of-ozzstein/pytest-504/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
+    "csv_path": "/private/var/folders/q8/2z6j2xz95sd5qh5v3qm27c7m0000gn/T/pytest-of-ozzstein/pytest-517/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
     "file_size_bytes": 534573,
     "pack_id": "SynthPack",
     "test_date": "2026-03-01",
@@ -1021,7 +1021,7 @@
     },
     {
       "module_id": 2,
-      "verdict": "MARGINAL",
+      "verdict": "NOK",
       "cells": [
         {
           "channel_index": 8,

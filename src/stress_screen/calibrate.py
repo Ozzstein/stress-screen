@@ -227,10 +227,7 @@ def run_calibration(
             _confusion(cell_items, {"HIGH", "ELEVATED"})))
     if module_items:
         lines.append(_fmt_confusion(
-            "Modules, strict (NOK = bad)", _confusion(module_items, {"NOK"})))
-        lines.append(_fmt_confusion(
-            "Modules, lenient (NOK or MARGINAL = bad)",
-            _confusion(module_items, {"NOK", "MARGINAL"})))
+            "Modules (NOK = bad)", _confusion(module_items, {"NOK"})))
 
     # ------------------------------------------------------------------
     # Separation power (rank AUC) per score

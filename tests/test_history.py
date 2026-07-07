@@ -37,15 +37,14 @@ def _fake_result(pack_id: str, test_date: str, k_by_cell: dict[str, float],
                  "metadata": {"k_corrected": k * 0.9}},
             ],
         })
-    any_high = any(c["verdict"] == "HIGH" for c in cells)
-    any_elev = any(c["verdict"] == "ELEVATED" for c in cells)
-    mod_verdict = "NOK" if any_high else ("MARGINAL" if any_elev else "OK")
+    any_flagged = any(c["verdict"] in ("HIGH", "ELEVATED") for c in cells)
+    mod_verdict = "NOK" if any_flagged else "OK"
     return {
         "schema_version": 2,
         "generated_at": f"{test_date}T10:00:00+00:00",
         "input": {"pack_id": pack_id, "test_date": test_date,
                   "csv_name": f"{pack_id}_M1.csv"},
-        "verdict": {"overall": mod_verdict, "exit_code": 1 if any_high else 0},
+        "verdict": {"overall": mod_verdict, "exit_code": 1 if any_flagged else 0},
         "modules": [{"module_id": 1, "verdict": mod_verdict, "cells": cells}],
     }
 
