@@ -76,6 +76,15 @@ class LiPlatingParams:
     0.5–0.6 eV; chosen so a +10 K excursion above threshold suppresses the
     gate to <0.5)."""
 
+    gate_max_boost: float = 3.0
+    """Cap on the cold-temperature gate so a very cold cell cannot
+    dominate the electrical signatures (max amplification factor)."""
+
+    main_plateau_v_max: float = 3.45
+    """Voltage (V) where the chemistry's main charge plateau ends. dQ/dV
+    peaks above this are anomalous (plating-induced staging). LFP default
+    3.45 V."""
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -340,6 +349,7 @@ def run_li_plating_analysis(
                 q_axis=q_ch,
                 dv_step=params.dv_step_v,
                 peak_prominence_pct=protocol.dqdv_prominence_pct(),
+                main_plateau_v_max=params.main_plateau_v_max,
             )
 
     # ------------------------------------------------------------------
@@ -467,8 +477,8 @@ def run_li_plating_analysis(
             gate = params.T_default_gate
         else:
             ratio = arrhenius_correction(T_celsius=float(T_mean), ea_ev=params.gate_ea_ev) / gate_at_thr
-            # Cap the boost so a very cold cell doesn't dominate (max 3x)
-            gate = float(min(3.0, ratio))
+            # Cap the boost so a very cold cell doesn't dominate
+            gate = float(min(params.gate_max_boost, ratio))
         gates.append(gate)
 
     # ------------------------------------------------------------------

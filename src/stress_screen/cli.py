@@ -16,17 +16,6 @@ import warnings
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Chemistry voltage presets
-# ---------------------------------------------------------------------------
-
-CHEM_VOLTAGE_BOUNDS: dict[str, tuple[float, float]] = {
-    "lfp": (3.0, 3.65),
-    "nmc": (3.0, 4.25),
-    "nca": (3.0, 4.25),
-}
-
-
-# ---------------------------------------------------------------------------
 # Helper: extract module count from filename
 # ---------------------------------------------------------------------------
 
@@ -150,7 +139,28 @@ def main() -> None:
         "--chem",
         choices=["lfp", "nmc", "nca"],
         default="lfp",
-        help="Battery chemistry (affects OCV-fit voltage bounds). Default: lfp",
+        help="Battery chemistry preset (selects OCV-fit voltage bounds and "
+             "chemistry-specific parameters). Default: lfp",
+    )
+    p.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to a YAML analysis-config file overriding preset parameters "
+             "(see configs/analysis_defaults.yaml for every available key)",
+    )
+    p.add_argument(
+        "--c-rate",
+        type=float,
+        default=None,
+        help="Cell-level charge C-rate of the test protocol (default: 0.5). "
+             "Scales dQ/dV peak-detection and thermal noise floors.",
+    )
+    p.add_argument(
+        "--capacity-ah",
+        type=float,
+        default=None,
+        help="Nominal cell capacity in Ah (default: 2.5)",
     )
     p.add_argument(
         "--mapping",
@@ -173,6 +183,18 @@ def main() -> None:
         "--no-pdf",
         action="store_true",
         help="Skip PDF report generation",
+    )
+    p.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Skip JSON result generation",
+    )
+    p.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        help="Write the JSON result to this path (default: <csv stem>_result.json "
+             "in the output directory)",
     )
     p.add_argument(
         "--downsample",
@@ -222,10 +244,11 @@ def main() -> None:
 def _run(args: argparse.Namespace) -> None:
     """Execute the full pipeline; separated from main() for clean error wrapping."""
     from stress_screen._progress import get as get_progress
+    from stress_screen.config import load_config
     from stress_screen.loader import load_csv, active_channel_count, remap_temperatures
     from stress_screen.topology import derive_topology
     from stress_screen.segmentation import segment, rest_segments, charge_segments
-    from stress_screen.analysis.rest import run_rest_analysis, RestParams
+    from stress_screen.analysis.rest import run_rest_analysis
     from stress_screen.analysis.li_plating import run_li_plating_analysis
     from stress_screen.analysis.aggregate import aggregate
     from stress_screen.analysis.short_circuit import run_isc_analysis
@@ -237,6 +260,21 @@ def _run(args: argparse.Namespace) -> None:
 
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
+
+    # ------------------------------------------------------------------
+    # 0. Resolve analysis configuration
+    #    (defaults ← chemistry preset ← --config file ← explicit CLI flags)
+    # ------------------------------------------------------------------
+    protocol_overrides = {}
+    if args.c_rate is not None:
+        protocol_overrides["c_rate"] = args.c_rate
+    if args.capacity_ah is not None:
+        protocol_overrides["nominal_capacity_ah"] = args.capacity_ah
+    config = load_config(
+        config_path=args.config,
+        chem=args.chem,
+        cli_overrides={"protocol": protocol_overrides} if protocol_overrides else None,
+    )
 
     # ------------------------------------------------------------------
     # 1. Load CSV
@@ -338,11 +376,8 @@ def _run(args: argparse.Namespace) -> None:
     # ------------------------------------------------------------------
     # 5. Rest analysis (six detection methods)
     # ------------------------------------------------------------------
-    v_low, v_high = CHEM_VOLTAGE_BOUNDS[args.chem]
-    rest_params = RestParams(voltage_bounds=(v_low, v_high))
-
     prog.stage(f"Running rest analysis (6 detection methods) on {n_active} channels...")
-    rest_results = run_rest_analysis(rest_cell_df, topology, params=rest_params)
+    rest_results = run_rest_analysis(rest_cell_df, topology, params=config.rest)
 
     # ------------------------------------------------------------------
     # 6. Li-plating analysis
@@ -353,8 +388,10 @@ def _run(args: argparse.Namespace) -> None:
     li_results = run_li_plating_analysis(
         charge_cell_df,
         li_rest_cell_df,
+        params=config.li_plating,
         top_charge_df=charge_top_df,
         n_parallel=topology.parallel,
+        protocol=config.protocol,
     )
 
     # ------------------------------------------------------------------
@@ -365,6 +402,7 @@ def _run(args: argparse.Namespace) -> None:
         rest_cell_df,
         rest_results,
         charge_cell_df,
+        params=config.short_circuit,
         top_charge_df=charge_top_df,
         n_parallel=topology.parallel,
         topology=topology,
@@ -374,7 +412,10 @@ def _run(args: argparse.Namespace) -> None:
     # 7. Aggregate into module verdicts
     # ------------------------------------------------------------------
     prog.stage("Aggregating verdicts...")
-    module_verdicts = aggregate(rest_results, li_results, topology, isc_results=isc_results)
+    module_verdicts = aggregate(
+        rest_results, li_results, topology,
+        isc_results=isc_results, params=config.aggregate,
+    )
 
     result = AnalysisResult(
         csv_path=csv_path,
@@ -414,6 +455,19 @@ def _run(args: argparse.Namespace) -> None:
                          top_charge_df=charge_top_df, n_parallel=topology.parallel)
         if not args.quiet:
             print(f"PDF report:  {pdf_path}")
+
+    if not args.no_json:
+        from stress_screen.serialize import write_json_result
+        json_path = args.json_out or (out_dir / f"{stem}_result.json")
+        prog.stage(f"Writing JSON result -> {json_path}")
+        write_json_result(
+            result,
+            json_path,
+            config=config.to_dict(),
+            run_info={"downsample": args.downsample},
+        )
+        if not args.quiet:
+            print(f"JSON result: {json_path}")
 
     prog.stage("Done.")
 

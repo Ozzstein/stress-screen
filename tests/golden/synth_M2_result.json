@@ -1,0 +1,1796 @@
+{
+  "schema_version": 1,
+  "tool_version": "0.1.0",
+  "generated_at": "2026-07-07T12:51:48.044806+00:00",
+  "input": {
+    "csv_name": "SynthPack_D01032026_080000_M2.csv",
+    "csv_path": "/private/var/folders/q8/2z6j2xz95sd5qh5v3qm27c7m0000gn/T/pytest-of-ozzstein/pytest-495/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
+    "file_size_bytes": 534573,
+    "pack_id": "SynthPack",
+    "test_date": "2026-03-01",
+    "module_count": 2,
+    "downsample": 1
+  },
+  "config": {
+    "preset": "lfp",
+    "protocol": {
+      "chemistry": "LFP",
+      "c_rate": 0.5,
+      "nominal_capacity_ah": 2.5,
+      "voltage_window": [
+        3.0,
+        3.65
+      ]
+    },
+    "rest": {
+      "settling_h": 2.0,
+      "z_thresh": 2.0,
+      "voltage_bounds": [
+        3.0,
+        3.65
+      ],
+      "cusum_k_sigma": 0.5,
+      "cusum_h_sigma": 4.0,
+      "min_points": 60,
+      "k_max": 0.05,
+      "arrhenius_ea_ev": 0.5,
+      "m6_slope_weight": 0.5,
+      "m6_max_slope_contribution": 1.0,
+      "m3_min_slope_mad_v_per_h": 5e-06,
+      "dv_dt_coeff_mv_per_c": -0.2,
+      "edge_sensor_deflation": 1.4142135623730951
+    },
+    "li_plating": {
+      "z_thresh": 2.0,
+      "min_charge_points": 60,
+      "relaxation_window_h": 0.5,
+      "dv_step_v": 0.002,
+      "T_plating_threshold_c": 20.0,
+      "T_default_gate": 0.5,
+      "gate_ea_ev": 0.55,
+      "gate_max_boost": 3.0,
+      "main_plateau_v_max": 3.45
+    },
+    "short_circuit": {
+      "z_thresh": 2.0,
+      "isc_k_sigma": 3.0,
+      "settling_h": 2.0,
+      "min_points": 60,
+      "n_q_resample": 500,
+      "isc_ea_ev": 0.1,
+      "s1_min_mad": 1e-06,
+      "s2_min_mad": 0.0001,
+      "s3_min_mad": 0.001,
+      "s3_warm_gate_cap": 1.5
+    },
+    "aggregate": {
+      "z_thresh": 2.0,
+      "winsor_z": 8.0,
+      "high_composite": 2.0,
+      "high_n_methods": 2,
+      "high_composite_floor": 1.0,
+      "elevated_composite": 1.0,
+      "elevated_n_methods": 1,
+      "elevated_composite_floor": 0.5
+    }
+  },
+  "topology": {
+    "module_count": 2,
+    "series": 8,
+    "parallel": 4,
+    "config_name": "4P8S",
+    "active_channels": 16
+  },
+  "segments": [
+    {
+      "phase": "charge",
+      "start_time_h": 0.0,
+      "end_time_h": 2.9833333333333334,
+      "duration_h": 2.9833333333333334
+    },
+    {
+      "phase": "rest",
+      "start_time_h": 3.0,
+      "end_time_h": 52.983333333333334,
+      "duration_h": 49.983333333333334
+    }
+  ],
+  "verdict": {
+    "overall": "NOK",
+    "exit_code": 1
+  },
+  "modules": [
+    {
+      "module_id": 1,
+      "verdict": "NOK",
+      "cells": [
+        {
+          "channel_index": 0,
+          "label": "M1/G1",
+          "group_in_module": 1,
+          "composite_z": 0.02067469577577774,
+          "n_methods_high": 1,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -0.2871433615106817,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 5.205897759985378e-05,
+                "V_ocv": 3.350563955012217,
+                "tau": 1.0195584889924059
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.22530825768655172,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.0051655969858723306
+              }
+            },
+            {
+              "name": "spread",
+              "z": 0.0982506045676919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 7.199245237659246e-06
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 2.922793291063931,
+              "verdict": "HIGH",
+              "metadata": {
+                "n_alarms": 23,
+                "first_alarm_h": 3.75
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -0.2418549533685461,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 7.735054987194955e-05,
+                "T_mean": 19.054513888888888,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": -2.3864046526822147,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 62.29058159722222,
+                "frac_bot20": 0.0,
+                "rank_slope": 0.10595040362478343,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.19169662158031564,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -0.6744823971895607,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 140.61747009383677,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.6985797151704586,
+                "heat_z": -0.9339102823452098,
+                "T_mean_charge": 23.244444444444444,
+                "dT_late": 0.41666666666666785,
+                "temperature_gate": 0.7879463146273151,
+                "gated_dqdv_z": -0.5314559191465114,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.026145002029804954,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.07843500609069547,
+                "s3_area_deficit_z": -1.2805963976798803e-12,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 5.634938607478408e-05,
+                "s2_dT_dt_slope": 0.00013102968641850923,
+                "s2_dT_dt_raw_slope": -0.006551635025033159,
+                "s3_dvdq_area": 0.24800000000000594,
+                "s3_temperature_gate": 0.9772102044203819
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 1,
+          "label": "M1/G2",
+          "group_in_module": 2,
+          "composite_z": -0.7641400620433558,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -1.5102394088248603,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 2.2401705516196047e-05,
+                "V_ocv": 3.347879291373956,
+                "tau": 1.1407628915779688
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -1.117171124676019,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.0017891102581980207
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 18,
+                "first_alarm_h": 8.083333333333334
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -1.4621923131702295,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 3.3297591166622494e-05,
+                "T_mean": 19.048958333333335,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": -1.6273953950930105,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 30.975477430555557,
+                "frac_bot20": 0.15902777777777777,
+                "rank_slope": 0.4837333885643793,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.33284648951640816,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -1.2250904138835035,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 131.0564059444979,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.8844088019645686,
+                "heat_z": -1.2452137097936262,
+                "T_mean_charge": 23.169444444444444,
+                "dT_late": 0.375,
+                "temperature_gate": 0.7922525874313713,
+                "gated_dqdv_z": -0.9705810502365751,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -0.06327583746344707,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.46863889975300754,
+                "s3_area_deficit_z": -0.6584664121433488,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 2.4249759200769503e-05,
+                "s2_dT_dt_slope": 0.0007828852337583483,
+                "s2_dT_dt_raw_slope": -0.00589977947769332,
+                "s3_dvdq_area": 0.24900000000000166,
+                "s3_temperature_gate": 0.9762423033044705
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 2,
+          "label": "M1/G3",
+          "group_in_module": 3,
+          "composite_z": -0.12039155310769688,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.5071515987133465,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 7.13188074405033e-05,
+                "V_ocv": 3.3515272699918617,
+                "tau": 0.9547417699002216
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.9033702805649769,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.0022918913830524998
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 18,
+                "first_alarm_h": 4.016666666666667
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.5446481073745191,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 0.000105742524089766,
+                "T_mean": 19.085763888888888,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 70.89301215277777,
+                "frac_bot20": 0.0,
+                "rank_slope": -0.293214856872089,
+                "slope_contribution_raw": 14.06942621557907,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.04191414829444448,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.07490169536147667,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 153.63019269165758,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.18927036617918888,
+                "heat_z": -0.4150712365978754,
+                "T_mean_charge": 23.45,
+                "dT_late": 0.4861111111111107,
+                "temperature_gate": 0.7762745150200338,
+                "gated_dqdv_z": 0.058144277240908614,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -1.0696477744871469,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -1.9493730954768258,
+                "s3_area_deficit_z": -1.259570227984615,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 7.716372641608094e-05,
+                "s2_dT_dt_slope": -0.003256527386734107,
+                "s2_dT_dt_raw_slope": -0.009939192098185775,
+                "s3_dvdq_area": 0.24990581162324677,
+                "s3_temperature_gate": 0.9798653752001376
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 3,
+          "label": "M1/G4",
+          "group_in_module": 4,
+          "composite_z": -0.3705431939078226,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -0.06367947538442219,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 5.7477463978148496e-05,
+                "V_ocv": 3.3518595374893123,
+                "tau": 1.06775828909957
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.28505403438458,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.005086629244631843
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.3504412321432697,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 3.0190071637577985e-06
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -1.5738117721113476,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 13,
+                "first_alarm_h": 2.55
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -0.102431374800421,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 8.238360167510723e-05,
+                "T_mean": 19.584895833333334,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 91.56358506944444,
+                "frac_bot20": 0.0,
+                "rank_slope": -0.0971091587678625,
+                "slope_contribution_raw": 4.659621134877936,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.2872401014902495,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.3753427013561283,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 158.8472175883428,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -1.0151774185974605,
+                "heat_z": -0.4150712365978489,
+                "T_mean_charge": 23.93611111111111,
+                "dT_late": 0.48611111111111427,
+                "temperature_gate": 0.7494171279153841,
+                "gated_dqdv_z": 0.2812882492343114,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -0.8717956297174506,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -1.8875822421536645,
+                "s3_area_deficit_z": -0.7278046469986873,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 6.176838313493435e-05,
+                "s2_dT_dt_slope": -0.003153302608181736,
+                "s2_dT_dt_raw_slope": -0.009835967319633404,
+                "s3_dvdq_area": 0.249094188376758,
+                "s3_temperature_gate": 0.9861585018560663
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 4,
+          "label": "M1/G5",
+          "group_in_module": 5,
+          "composite_z": 4.38370106603818,
+          "n_methods_high": 5,
+          "verdict": "HIGH",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 33.275561777845745,
+              "verdict": "HIGH",
+              "metadata": {
+                "k": 0.000865877549221635,
+                "V_ocv": 3.346109474183954,
+                "tau": 0.8517248126988878
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.8839923501334715,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.0064951123652797395
+              }
+            },
+            {
+              "name": "spread",
+              "z": 85.64887254819797,
+              "verdict": "HIGH",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.000804231724625255
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -0.22483025315876395,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 16,
+                "first_alarm_h": 4.216666666666667
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 32.06043517769471,
+              "verdict": "HIGH",
+              "metadata": {
+                "k_corrected": 0.0012434309306794964,
+                "T_mean": 19.556944444444444,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 2.3864046526822147,
+              "verdict": "HIGH",
+              "metadata": {
+                "mean_rank_pct": 6.25,
+                "frac_bot20": 1.0,
+                "rank_slope": 0.0,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.024041778648509662,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.8744928851017353,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 167.51473927754986,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.5678110985375667,
+                "heat_z": 1.3271663339441247e-14,
+                "T_mean_charge": 23.755555555555556,
+                "dT_late": 0.5416666666666679,
+                "temperature_gate": 0.7592722873375319,
+                "gated_dqdv_z": 0.6639782131315921,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 183.00680959622184,
+              "verdict": "HIGH",
+              "metadata": {
+                "s1_excess_k_z": 549.0988637947527,
+                "s2_dT_dt_z": -0.07843500609069547,
+                "s3_area_deficit_z": 3.48099296335858e-12,
+                "s1_excess_k": 0.000814094524560964,
+                "s1_k_corrected_isc": 0.0009308710342965256,
+                "s2_dT_dt_slope": -0.00013102968641850836,
+                "s2_dT_dt_raw_slope": -0.006813694397870176,
+                "s3_dvdq_area": 0.24799999999999875,
+                "s3_temperature_gate": 0.9838187580447927
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 5,
+          "label": "M1/G6",
+          "group_in_module": 6,
+          "composite_z": 0.16981517082413466,
+          "n_methods_high": 1,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -0.7133470483813416,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 4.172451635101094e-05,
+                "V_ocv": 3.34742604755544,
+                "tau": 0.9184233862136362
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.10223685570501702,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.004175863198900018
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 2.4731327847464035,
+              "verdict": "HIGH",
+              "metadata": {
+                "n_alarms": 22,
+                "first_alarm_h": 4.083333333333333
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -0.6675630670841796,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 6.19829125514916e-05,
+                "T_mean": 19.057465277777776,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 1.1302277591175491,
+              "verdict": "ELEVATED",
+              "metadata": {
+                "mean_rank_pct": 18.045789930555557,
+                "frac_bot20": 0.7368055555555556,
+                "rank_slope": 0.12180409899198245,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.048747060919920995,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -1.0744197501542012,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 133.67273523441463,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.6504018037793894,
+                "heat_z": -1.3271663339441247e-14,
+                "T_mean_charge": 23.26388888888889,
+                "dT_late": 0.5416666666666643,
+                "temperature_gate": 0.7868340537650479,
+                "gated_dqdv_z": -0.8453900474590601,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -0.0384544581012518,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -0.11536337430419459,
+                "s3_area_deficit_z": 4.391744028930437e-13,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 4.5161405032327715e-05,
+                "s2_dT_dt_slope": -0.00019272041289549683,
+                "s2_dT_dt_raw_slope": -0.006875385124347165,
+                "s3_dvdq_area": 0.24800000000000333,
+                "s3_temperature_gate": 0.9774612183412996
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 6,
+          "label": "M1/G7",
+          "group_in_module": 7,
+          "composite_z": 0.1832675058355474,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.8446235219664058,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 7.950172706524504e-05,
+                "V_ocv": 3.3503012922438575,
+                "tau": 0.901117503958001
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.7580451033039519,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.0026336428686314153
+              }
+            },
+            {
+              "name": "spread",
+              "z": 0.7520832739648503,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 1.3290678143168685e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 15,
+                "first_alarm_h": 6.166666666666666
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.890230469320013,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 0.00011821770187384062,
+                "T_mean": 19.043055555555554,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0033144509065030645,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 45.13780381944444,
+                "frac_bot20": 0.0006944444444444445,
+                "rank_slope": -0.34434734775539483,
+                "slope_contribution_raw": 16.52293356979636,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.10539136794934406,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -0.07490169536147503,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 151.02892321307178,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 1.0908855650691343,
+                "heat_z": -1.4527493280925707,
+                "T_mean_charge": 23.086111111111112,
+                "dT_late": 0.34722222222222143,
+                "temperature_gate": 0.7970675227819581,
+                "gated_dqdv_z": -0.05970170877393979,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.513815561256195,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.8837052785249802,
+                "s3_area_deficit_z": 0.6577414052436047,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 8.606721558689053e-05,
+                "s2_dT_dt_slope": 0.001476274833173567,
+                "s2_dT_dt_raw_slope": -0.005206389878278101,
+                "s3_dvdq_area": 0.24699999999999855,
+                "s3_temperature_gate": 0.9751674080666038
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 7,
+          "label": "M1/G8",
+          "group_in_module": 8,
+          "composite_z": 0.3830407958926419,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.6356344149384797,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 7.443422085977713e-05,
+                "V_ocv": 3.3494077293785836,
+                "tau": 0.9497534181168926
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.12973586571278165,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.003984822728591495
+              }
+            },
+            {
+              "name": "spread",
+              "z": 0.6791205935610929,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 1.2610921237330066e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 18,
+                "first_alarm_h": 5.716666666666667
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.6814184145000668,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 0.00011067979544634874,
+                "T_mean": 19.04340277777778,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.21875375982920278,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 32.81792534722222,
+                "frac_bot20": 0.04583333333333333,
+                "rank_slope": -0.27377308508127,
+                "slope_contribution_raw": 13.136545199149607,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.018363359408992197,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.4246821248637926,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 159.70397480753599,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 1.0840030062989854,
+                "heat_z": -1.3489815189430985,
+                "T_mean_charge": 23.08888888888889,
+                "dT_late": 0.3611111111111107,
+                "temperature_gate": 0.7969065106957973,
+                "gated_dqdv_z": 0.3384319502800819,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.28628093113979053,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.8588427934153186,
+                "s3_area_deficit_z": 4.0529789418015405e-12,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 8.05808393817624e-05,
+                "s2_dT_dt_slope": 0.0014347407810981856,
+                "s2_dT_dt_raw_slope": -0.0052479239303534824,
+                "s3_dvdq_area": 0.24799999999999783,
+                "s3_temperature_gate": 0.975203228570968
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module_id": 2,
+      "verdict": "MARGINAL",
+      "cells": [
+        {
+          "channel_index": 8,
+          "label": "M2/G1",
+          "group_in_module": 1,
+          "composite_z": -0.13026915451191856,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.37877509691581646,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 6.820597190210218e-05,
+                "V_ocv": 3.3500197954462183,
+                "tau": 0.9182180910354196
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 1.3003611381190074,
+              "verdict": "ELEVATED",
+              "metadata": {
+                "pearson_r": -0.008740912510817699
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.0982506045676919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 5.368541469976158e-06
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -1.5738117721113476,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 13,
+                "first_alarm_h": 4.25
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.4078245072196552,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 0.00010080332890810253,
+                "T_mean": 19.132986111111112,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0033144509065030645,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 46.28363715277778,
+                "frac_bot20": 0.0006944444444444445,
+                "rank_slope": -0.251076575514995,
+                "slope_contribution_raw": 12.047491015127845,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.388811540879486,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -1.7748311575557594,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 121.51040160675626,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.732992509021221,
+                "heat_z": 0.5188390457473476,
+                "T_mean_charge": 23.822222222222223,
+                "dT_late": 0.6111111111111107,
+                "temperature_gate": 0.7556170594227003,
+                "gated_dqdv_z": -1.3410927002440702,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -1.071554511697805,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -2.7048980999445096,
+                "s3_area_deficit_z": -0.5097654351489052,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 7.374844988164278e-05,
+                "s2_dT_dt_slope": -0.004518670520914175,
+                "s2_dT_dt_raw_slope": -0.015134233957155907,
+                "s3_dvdq_area": 0.24876753507013924,
+                "s3_temperature_gate": 0.984682347515872
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 9,
+          "label": "M2/G2",
+          "group_in_module": 2,
+          "composite_z": -0.828849044786719,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -1.1208987815487672,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 3.184232217234899e-05,
+                "V_ocv": 3.348301471463875,
+                "tau": 1.006142754558596
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.09399579204067424,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.004637330373068466
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -0.22483025315876395,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 16,
+                "first_alarm_h": 3.416666666666667
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -1.081627275834219,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 4.7035608559762864e-05,
+                "T_mean": 19.140798611111112,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": -2.1858803728387786,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 34.18402777777778,
+                "frac_bot20": 0.04201388888888889,
+                "rank_slope": 0.28614471494559157,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.3777747250205922,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -1.2246567774077481,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 131.06393584968723,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.7949355379525881,
+                "heat_z": 0.20753561829893108,
+                "T_mean_charge": 23.84722222222222,
+                "dT_late": 0.5694444444444429,
+                "temperature_gate": 0.7542513114441101,
+                "gated_dqdv_z": -0.9236989804287116,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -1.0592860548541412,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -3.1778581645623682,
+                "s3_area_deficit_z": -5.5320551428622574e-14,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 3.442620409859013e-05,
+                "s2_dT_dt_slope": -0.005308774481430183,
+                "s2_dT_dt_raw_slope": -0.015924337917671914,
+                "s3_dvdq_area": 0.24800000000000408,
+                "s3_temperature_gate": 0.9850062889371634
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 10,
+          "label": "M2/G3",
+          "group_in_module": 3,
+          "composite_z": -0.1783286472580818,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -0.4482861571498643,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 4.815163463599831e-05,
+                "V_ocv": 3.351760234567519,
+                "tau": 0.9681642483227355
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.18642417237644285,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.004854688004311304
+              }
+            },
+            {
+              "name": "spread",
+              "z": 0.564172351453107,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 1.154000579186503e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -0.22483025315876395,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 16,
+                "first_alarm_h": 5.2666666666666675
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -0.41335740999482423,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 7.11594826404691e-05,
+                "T_mean": 19.134027777777778,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 85.90277777777777,
+                "frac_bot20": 0.0,
+                "rank_slope": -0.02273785900581826,
+                "slope_contribution_raw": 1.091038267962513,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": -0.17142255305764295,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -0.6240419575981484,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 141.49334596929177,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.732992509021221,
+                "heat_z": 0.5188390457473476,
+                "T_mean_charge": 23.822222222222223,
+                "dT_late": 0.6111111111111107,
+                "temperature_gate": 0.7556170594227003,
+                "gated_dqdv_z": -0.47153674895669834,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -0.9193293285331089,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -2.757987985601391,
+                "s3_area_deficit_z": 2.064621366226074e-12,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 5.206374262949719e-05,
+                "s2_dT_dt_slope": -0.00460735988828124,
+                "s2_dT_dt_raw_slope": -0.015222923324522972,
+                "s3_dvdq_area": 0.2480000000000009,
+                "s3_temperature_gate": 0.984682347515872
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 11,
+          "label": "M2/G4",
+          "group_in_module": 4,
+          "composite_z": -0.08030461782358217,
+          "n_methods_high": 1,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -1.4794978064848692,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 2.3147118819498576e-05,
+                "V_ocv": 3.351570366820137,
+                "tau": 0.9507868611788897
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 0.6635220668243622,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.0059766471669778646
+              }
+            },
+            {
+              "name": "spread",
+              "z": 3.4040458906964823,
+              "verdict": "HIGH",
+              "metadata": {
+                "divergence_slope_v_per_h": 3.799769127335441e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.22483025315876395,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 17,
+                "first_alarm_h": 4.316666666666666
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -1.4337681801593172,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 3.432367395242521e-05,
+                "T_mean": 19.084027777777777,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": -2.3864046526822147,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 91.35633680555556,
+                "frac_bot20": 0.0,
+                "rank_slope": 0.37401368682649594,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.2014559111480628,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 1.1252438529569633,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 171.8689186873736,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.14109245478811974,
+                "heat_z": -0.20753561829893108,
+                "T_mean_charge": 23.469444444444445,
+                "dT_late": 0.5138888888888893,
+                "temperature_gate": 0.7751802472067569,
+                "gated_dqdv_z": 0.8722668081030625,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.16337957491007274,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.49013872473036496,
+                "s3_area_deficit_z": -1.46789174592901e-13,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 2.504472725002052e-05,
+                "s2_dT_dt_slope": 0.0008188017902201212,
+                "s2_dT_dt_raw_slope": -0.00979676164602161,
+                "s3_dvdq_area": 0.24800000000000422,
+                "s3_temperature_gate": 0.9801167223662213
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 12,
+          "label": "M2/G5",
+          "group_in_module": 5,
+          "composite_z": -0.33676329697638313,
+          "n_methods_high": 1,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": -1.2658685282965094,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 2.8327138526193078e-05,
+                "V_ocv": 3.3501009762049536,
+                "tau": 1.0111020306802212
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -1.4149293169610253,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.0010888922610513946
+              }
+            },
+            {
+              "name": "spread",
+              "z": 2.28565867340824,
+              "verdict": "HIGH",
+              "metadata": {
+                "divergence_slope_v_per_h": 2.7578235324828603e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 18,
+                "first_alarm_h": 3.3666666666666663
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": -1.2199297073782842,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 4.204302904335181e-05,
+                "T_mean": 19.07065972222222,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": -2.3864046526822147,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 64.83615451388889,
+                "frac_bot20": 0.0,
+                "rank_slope": 0.4833267700438573,
+                "slope_contribution_raw": 0.0,
+                "slope_contribution_capped": 0.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.58817027936702,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 1.5248642405945054,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 178.8081495843876,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": 0.3338041003523875,
+                "heat_z": 0.8301424731957642,
+                "T_mean_charge": 23.391666666666666,
+                "dT_late": 0.6527777777777786,
+                "temperature_gate": 0.7795674606786446,
+                "gated_dqdv_z": 1.1887345439199284,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.0447061172554164,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 1.3450753294473945,
+                "s3_area_deficit_z": -1.2109569776811453,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 3.06549748841175e-05,
+                "s2_dT_dt_slope": 0.0022470170834559544,
+                "s2_dT_dt_raw_slope": -0.008368546352785777,
+                "s3_dvdq_area": 0.2498336673346683,
+                "s3_temperature_gate": 0.9791115227832226
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 13,
+          "label": "M2/G6",
+          "group_in_module": 6,
+          "composite_z": 0.006654382026807154,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.06367947538442219,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 6.05656262394321e-05,
+                "V_ocv": 3.3522436120864065,
+                "tau": 1.0294146336551924
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.09399579204067424,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": -0.00419524315633837
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -0.22483025315876395,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 16,
+                "first_alarm_h": 2.8
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.102431374800421,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 8.977894213234953e-05,
+                "T_mean": 19.0890625,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 88.03602430555556,
+                "frac_bot20": 0.0,
+                "rank_slope": -0.1668758829000148,
+                "slope_contribution_raw": 8.00726111448571,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.8518068310464251,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.575252841913801,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 162.3185685676688,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.14797501355827752,
+                "heat_z": 3.113034274484072,
+                "T_mean_charge": 23.586111111111112,
+                "dT_late": 0.9583333333333321,
+                "temperature_gate": 0.7686499414568079,
+                "gated_dqdv_z": 0.4421680632599055,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.028634107261791327,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.08590232178355467,
+                "s3_area_deficit_z": 1.8193122931433294e-12,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 6.552633328788475e-05,
+                "s2_dT_dt_slope": 0.00014350421893135137,
+                "s2_dT_dt_raw_slope": -0.01047205921731038,
+                "s3_dvdq_area": 0.24800000000000125,
+                "s3_temperature_gate": 0.981625466983479
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 14,
+          "label": "M2/G7",
+          "group_in_module": 7,
+          "composite_z": 0.012817711497301265,
+          "n_methods_high": 0,
+          "verdict": "NORMAL",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.21848798104592979,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 6.431937720882629e-05,
+                "V_ocv": 3.3509217584504425,
+                "tau": 1.0209680547665039
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": 1.671806970584046,
+              "verdict": "ELEVATED",
+              "metadata": {
+                "pearson_r": 0.008347763240882562
+              }
+            },
+            {
+              "name": "spread",
+              "z": -0.6744906870791642,
+              "verdict": "NORMAL",
+              "metadata": {
+                "divergence_slope_v_per_h": 0.0
+              }
+            },
+            {
+              "name": "cusum",
+              "z": -2.0234722784288754,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 12,
+                "first_alarm_h": 2.9333333333333336
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.25666596971026095,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 9.534665681872134e-05,
+                "T_mean": 19.088541666666668,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 0.0,
+              "verdict": "NORMAL",
+              "metadata": {
+                "mean_rank_pct": 63.56987847222222,
+                "frac_bot20": 0.0,
+                "rank_slope": -0.16208961463030655,
+                "slope_contribution_raw": 7.777600008677543,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.6133459270830408,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": -0.6744991217635523,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 140.61717967902268,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.14109245478811974,
+                "heat_z": 3.113034274484072,
+                "T_mean_charge": 23.583333333333332,
+                "dT_late": 0.9583333333333321,
+                "temperature_gate": 0.7688047243233789,
+                "gated_dqdv_z": -0.518558111363789,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": 0.04019780906317239,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": 0.1205934271860257,
+                "s3_area_deficit_z": 3.491481629494059e-12,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 6.958803262725762e-05,
+                "s2_dT_dt_slope": 0.0002014574835379878,
+                "s2_dT_dt_raw_slope": -0.010414105952703744,
+                "s3_dvdq_area": 0.24799999999999872,
+                "s3_temperature_gate": 0.9815895313138547
+              }
+            }
+          ]
+        },
+        {
+          "channel_index": 15,
+          "label": "M2/G8",
+          "group_in_module": 8,
+          "composite_z": 0.9207264308334713,
+          "n_methods_high": 1,
+          "verdict": "ELEVATED",
+          "methods": [
+            {
+              "name": "ocv_k",
+              "z": 0.7877523669937779,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k": 7.812273207916948e-05,
+                "V_ocv": 3.348277229785315,
+                "tau": 0.9793517914404981
+              }
+            },
+            {
+              "name": "thermal_corr",
+              "z": -0.48469302642308804,
+              "verdict": "NORMAL",
+              "metadata": {
+                "pearson_r": 0.0028043376841092376
+              }
+            },
+            {
+              "name": "spread",
+              "z": 1.205824785424742,
+              "verdict": "ELEVATED",
+              "metadata": {
+                "divergence_slope_v_per_h": 1.751796151836429e-05
+              }
+            },
+            {
+              "name": "cusum",
+              "z": 0.6744907594762919,
+              "verdict": "NORMAL",
+              "metadata": {
+                "n_alarms": 18,
+                "first_alarm_h": 3.033333333333333
+              }
+            },
+            {
+              "name": "temp_k",
+              "z": 0.8228153166771289,
+              "verdict": "NORMAL",
+              "metadata": {
+                "k_corrected": 0.00011578408225903761,
+                "T_mean": 19.091666666666665,
+                "temp_correction_applied": true
+              }
+            },
+            {
+              "name": "rank",
+              "z": 3.5166324117997645,
+              "verdict": "HIGH",
+              "metadata": {
+                "mean_rank_pct": 17.85698784722222,
+                "frac_bot20": 0.7368055555555556,
+                "rank_slope": -0.24374868246933865,
+                "slope_contribution_raw": 11.6958742804871,
+                "slope_contribution_capped": 1.0
+              }
+            },
+            {
+              "name": "li_plating",
+              "z": 0.8716229399803257,
+              "verdict": "NORMAL",
+              "metadata": {
+                "dqdv_z": 0.6250928001294579,
+                "relaxation_z": null,
+                "charge_time_z": 0.0,
+                "dqdv_extra_peak_sum": 163.18401735020103,
+                "dqdv_extra_peak_voltage": null,
+                "tau_inv": null,
+                "charge_duration_h": 2.9833333333333334,
+                "cold_z": -0.20991804248964457,
+                "heat_z": 3.2168020836335445,
+                "T_mean_charge": 23.61111111111111,
+                "dT_late": 0.9722222222222214,
+                "temperature_gate": 0.7672584273536267,
+                "gated_dqdv_z": 0.47960771877740277,
+                "gated_relaxation_z": null,
+                "gated_charge_time_z": 0.0
+              }
+            },
+            {
+              "name": "isc",
+              "z": -0.02863410726117281,
+              "verdict": "NORMAL",
+              "metadata": {
+                "s1_excess_k_z": 0.0,
+                "s2_dT_dt_z": -0.0859023217835552,
+                "s3_area_deficit_z": 3.676589423480106e-14,
+                "s1_excess_k": 0.0,
+                "s1_k_corrected_isc": 8.451848619346112e-05,
+                "s2_dT_dt_slope": -0.00014350421893135137,
+                "s2_dT_dt_raw_slope": -0.010759067655173083,
+                "s3_dvdq_area": 0.24800000000000394,
+                "s3_temperature_gate": 0.981948916933799
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

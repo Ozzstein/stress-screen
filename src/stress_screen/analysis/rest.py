@@ -105,6 +105,12 @@ class RestParams:
     data is unreliable or absent).
     """
 
+    edge_sensor_deflation: float = 1.4142135623730951
+    """Deflation factor applied to the M2 thermal_corr z of single-sensor
+    edge cells (G1/G8). Interior groups average two bracketing sensors (√2
+    noise reduction); without this penalty the noisier edge cells produce
+    structural false positives. Default √2."""
+
 
 # ---------------------------------------------------------------------------
 # Verdict helper
@@ -335,13 +341,12 @@ def run_rest_analysis(
     # inflated |r| and z, producing structural false positives.  We deflate
     # the z by 1/√n_sensors so cells with fewer sensors face a higher
     # effective threshold.
-    sqrt2 = float(np.sqrt(2.0))
     for ch in channels:
         module_id = topology.module_for_channel(ch)
         group_idx = topology.group_index_in_module(ch)
         n_sensors = len(topology._temp_sensor_map.get((module_id, group_idx), []))
         if n_sensors == 1 and not np.isnan(m2_z[ch]):
-            m2_z[ch] = m2_z[ch] / sqrt2
+            m2_z[ch] = m2_z[ch] / params.edge_sensor_deflation
 
     # ------------------------------------------------------------------ #
     # M3 — Slope of |V_cell − V_fleet_median| (divergence rate)            #

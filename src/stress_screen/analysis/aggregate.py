@@ -7,10 +7,42 @@ them into a single CellVerdict per cell, and rolls up to ModuleVerdict objects.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from stress_screen.analysis.util import winsorize_clip
 from stress_screen.models import CellVerdict, MethodResult, ModuleVerdict, PackTopology
+
+
+@dataclass
+class AggregateParams:
+    """Tunable parameters for composite-z aggregation and verdict gates."""
+
+    z_thresh: float = 2.0
+    """Z-score threshold above which a single method counts as firing HIGH."""
+
+    winsor_z: float = 8.0
+    """Per-method z-scores are clipped to ±winsor_z before averaging, so one
+    extreme method cannot dominate the composite."""
+
+    high_composite: float = 2.0
+    """Cell is HIGH when composite_z exceeds this outright."""
+
+    high_n_methods: int = 2
+    """... or when at least this many methods fire HIGH and the composite
+    clears high_composite_floor."""
+
+    high_composite_floor: float = 1.0
+
+    elevated_composite: float = 1.0
+    """Cell is ELEVATED when composite_z exceeds this outright."""
+
+    elevated_n_methods: int = 1
+    """... or when at least this many methods fire HIGH and the composite
+    clears elevated_composite_floor."""
+
+    elevated_composite_floor: float = 0.5
 
 
 def aggregate(
@@ -19,6 +51,7 @@ def aggregate(
     topology: PackTopology,
     isc_results: dict[int, MethodResult] | None = None,
     z_thresh: float = 2.0,
+    params: AggregateParams | None = None,
 ) -> list[ModuleVerdict]:
     """
     Aggregate per-cell method results into module-level verdicts.
@@ -37,11 +70,17 @@ def aggregate(
         cell's composite (8 total methods). Defaults to None (7-method composite).
     z_thresh:
         Z-score threshold above which a method is counted as firing HIGH.
+        Ignored when *params* is given (use ``params.z_thresh`` instead).
+    params:
+        Full aggregation parameter set. Defaults to ``AggregateParams`` built
+        from *z_thresh* (which reproduces the historical hardcoded gates).
 
     Returns
     -------
     list[ModuleVerdict] ordered by module_id (1..N).
     """
+    if params is None:
+        params = AggregateParams(z_thresh=z_thresh)
     # --- Cell-level aggregation -------------------------------------------------
     cell_verdicts: dict[int, CellVerdict] = {}
 
@@ -86,7 +125,7 @@ def aggregate(
         if z_with_conf:
             zs = np.array([z for z, _ in z_with_conf])
             ws = np.array([w for _, w in z_with_conf])
-            clipped_z = winsorize_clip(zs, low=-8.0, high=8.0)
+            clipped_z = winsorize_clip(zs, low=-params.winsor_z, high=params.winsor_z)
             composite_z = float(np.sum(clipped_z * ws) / np.sum(ws))
         else:
             composite_z = 0.0
@@ -95,17 +134,23 @@ def aggregate(
         valid_z = [z for z, _ in z_with_conf]
 
         # 3. Count methods firing HIGH
-        n_high = sum(1 for z in valid_z if z >= z_thresh)
+        n_high = sum(1 for z in valid_z if z >= params.z_thresh)
 
         # 4. Cell verdict
         # n_high gates require composite evidence above a floor so that a
         # single method barely crossing z_thresh cannot overrule the rest of
-        # the methods saying NORMAL:
+        # the methods saying NORMAL (defaults):
         #   HIGH:     composite > 2.0, OR (n_high >= 2 AND composite >= 1.0)
         #   ELEVATED: composite > 1.0, OR (n_high >= 1 AND composite >= 0.5)
-        if composite_z > 2.0 or (n_high >= 2 and composite_z >= 1.0):
+        if composite_z > params.high_composite or (
+            n_high >= params.high_n_methods
+            and composite_z >= params.high_composite_floor
+        ):
             verdict = "HIGH"
-        elif composite_z > 1.0 or (n_high >= 1 and composite_z >= 0.5):
+        elif composite_z > params.elevated_composite or (
+            n_high >= params.elevated_n_methods
+            and composite_z >= params.elevated_composite_floor
+        ):
             verdict = "ELEVATED"
         else:
             verdict = "NORMAL"

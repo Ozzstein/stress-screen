@@ -15,7 +15,7 @@ class ProtocolMetadata:
     hard-coded for a single protocol.
     """
 
-    chemistry: Literal["LFP", "NMC", "LCO", "LTO"] = "LFP"
+    chemistry: Literal["LFP", "NMC", "NCA", "LCO", "LTO"] = "LFP"
     c_rate: float = 0.5
     """Cell-level C-rate during the charge phase (1.0 = 1C)."""
     nominal_capacity_ah: float = 2.5

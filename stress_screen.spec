@@ -3,15 +3,24 @@
 #   macOS:   pyinstaller stress_screen.spec  →  dist/stress_screen
 #   Windows: pyinstaller stress_screen.spec  →  dist/stress_screen.exe
 #
-# Kaleido bundling: After `pip install kaleido`, find kaleido's executable:
-#   python -c "import kaleido; print(kaleido.__file__)"
-# Add the kaleido executable dir to datas and binaries as documented at
-# https://github.com/plotly/Kaleido — then rebuild.
-
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import sys, os
 
-datas = [('configs/temp_mapping.yaml', 'configs')]
+datas = [
+    ('configs/temp_mapping.yaml', 'configs'),
+    ('configs/analysis_defaults.yaml', 'configs'),
+]
+
+# Kaleido static-image engine (kaleido 0.2.x): bundle its Chromium-based
+# executable directory, otherwise PDF export dies in the frozen binary.
+import kaleido
+_kaleido_exe_dir = os.path.join(os.path.dirname(kaleido.__file__), 'executable')
+if not os.path.isdir(_kaleido_exe_dir):
+    raise SystemExit(
+        f"kaleido executable dir not found at {_kaleido_exe_dir}; "
+        "PDF export would be broken in the frozen binary"
+    )
+datas.append((_kaleido_exe_dir, 'kaleido/executable'))
 templates_dir = os.path.join(os.path.dirname(os.path.abspath('__file__')), 'src', 'stress_screen', 'reports', 'templates')
 if os.path.isdir(templates_dir):
     datas.append((templates_dir, 'reports/templates'))

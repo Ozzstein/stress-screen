@@ -42,6 +42,19 @@ class ShortCircuitParams:
     Lower than the 0.5 eV used for benign SEI self-discharge because
     metallic-Li bridging is largely electronic (T-insensitive)."""
 
+    s1_min_mad: float = 1e-6
+    """MAD floor for S1 excess-k z-scores (h⁻¹). Prevents division-by-noise
+    z inflation when the fleet is uniformly healthy."""
+
+    s2_min_mad: float = 1e-4
+    """MAD floor for S2 rest-phase thermal-slope z-scores (°C/h)."""
+
+    s3_min_mad: float = 1e-3
+    """MAD floor for S3 dV/dQ area-deficit z-scores (V)."""
+
+    s3_warm_gate_cap: float = 1.5
+    """Cap on the warm-temperature amplification of the S3 gate."""
+
 
 def _verdict(z: float, z_thresh: float) -> str:
     if np.isnan(z):
@@ -150,7 +163,7 @@ def run_isc_analysis(
             s1_excess[ch] = np.nan
 
     s1_arr = np.array([s1_excess[ch] for ch in channels])
-    s1_z_arr = robust_z(s1_arr, min_mad=1e-6)
+    s1_z_arr = robust_z(s1_arr, min_mad=params.s1_min_mad)
     s1_z: dict[int, float] = {ch: float(s1_z_arr[i]) for i, ch in enumerate(channels)}
 
     # S2: Thermal anomaly during rest — excess dT/dt above module-median baseline.
@@ -187,7 +200,7 @@ def run_isc_analysis(
         s2_slope = dict(s2_raw_slope)
 
     s2_arr = np.array([s2_slope[ch] for ch in channels])
-    s2_z_arr = robust_z(s2_arr, min_mad=1e-4)
+    s2_z_arr = robust_z(s2_arr, min_mad=params.s2_min_mad)
     s2_z: dict[int, float] = {ch: float(s2_z_arr[i]) for i, ch in enumerate(channels)}
 
     # S3: Charge-acceptance shape (dV/dQ area deficit)
@@ -229,7 +242,7 @@ def run_isc_analysis(
 
     # Invert: low area = high z (area deficit is the suspicious direction)
     s3_arr = np.array([s3_area[ch] for ch in channels])
-    s3_z_arr = -robust_z(s3_arr, min_mad=1e-3)
+    s3_z_arr = -robust_z(s3_arr, min_mad=params.s3_min_mad)
     s3_z: dict[int, float] = {ch: float(s3_z_arr[i]) for i, ch in enumerate(channels)}
 
     # S3 temperature gate: cold cells naturally show reduced charge acceptance
@@ -258,7 +271,7 @@ def run_isc_analysis(
             # warm T → gate > 1 (amplify z).
             corr = arrhenius_correction(T_celsius=T, ea_ev=params.isc_ea_ev)
             g = 1.0 / corr if corr > 0 else 1.0
-            s3_gate[ch] = min(g, 1.5)  # cap warm-T amplification at 1.5
+            s3_gate[ch] = min(g, params.s3_warm_gate_cap)  # cap warm-T amplification
         z = s3_z.get(ch, np.nan)
         s3_z[ch] = float(z * s3_gate[ch]) if not np.isnan(z) else np.nan
 

@@ -1,0 +1,88 @@
+# analysis_defaults.yaml — chemistry presets + reference of every tunable key.
+#
+# Baseline defaults live in the parameter dataclasses (the single source of
+# truth); this file supplies the per-chemistry presets applied by --chem and
+# documents every key a user config file (--config my_config.yaml) may set.
+#
+# A user config file uses the same section/key structure shown in the
+# reference below (without the leading comment markers). Unknown sections or
+# keys are rejected with an error.
+_version: 1
+
+# ---------------------------------------------------------------------------
+# Chemistry presets (--chem). The lfp preset is empty because the dataclass
+# defaults ARE the LFP baseline.
+# ---------------------------------------------------------------------------
+presets:
+  lfp: {}
+  nmc:
+    protocol:
+      chemistry: NMC
+      voltage_window: [3.0, 4.25]
+    rest:
+      voltage_bounds: [3.0, 4.25]
+  nca:
+    protocol:
+      chemistry: NCA
+      voltage_window: [3.0, 4.25]
+    rest:
+      voltage_bounds: [3.0, 4.25]
+
+# ---------------------------------------------------------------------------
+# Reference: every configurable key and its baseline (LFP) default.
+# Copy the sections you want to change into your own YAML and pass it with
+# --config. Values shown here are documentation only — they are NOT loaded.
+# ---------------------------------------------------------------------------
+# protocol:
+#   chemistry: LFP              # LFP | NMC | NCA | LCO | LTO
+#   c_rate: 0.5                 # cell-level charge C-rate (also via --c-rate)
+#   nominal_capacity_ah: 2.5    # also via --capacity-ah
+#   voltage_window: [3.0, 3.65]
+#
+# rest:
+#   settling_h: 2.0             # hours of rest discarded as settling transient
+#   z_thresh: 2.0               # robust z threshold for a HIGH method verdict
+#   voltage_bounds: [3.0, 3.65] # OCV curve-fit bounds (V)
+#   cusum_k_sigma: 0.5          # CUSUM allowance (× sigma)
+#   cusum_h_sigma: 4.0          # CUSUM decision threshold (× sigma)
+#   min_points: 60              # min samples per channel to run analysis
+#   k_max: 0.05                 # upper bound for self-discharge rate k (1/h)
+#   arrhenius_ea_ev: 0.5        # Ea for self-discharge T-correction (eV)
+#   m6_slope_weight: 0.5        # rank-slope penalty weight (M6)
+#   m6_max_slope_contribution: 1.0
+#   m3_min_slope_mad_v_per_h: 5.0e-6  # MAD floor for M3 divergence slopes
+#   dv_dt_coeff_mv_per_c: -0.2  # OCV temperature coefficient (mV/°C)
+#   edge_sensor_deflation: 1.4142135623730951  # √2 penalty for edge cells
+#
+# li_plating:
+#   z_thresh: 2.0
+#   min_charge_points: 60
+#   relaxation_window_h: 0.5    # post-charge rest window for relaxation fit
+#   dv_step_v: 0.002            # dQ/dV voltage resampling step (V)
+#   T_plating_threshold_c: 20.0 # above this, plating gated out
+#   T_default_gate: 0.5         # gate when temperature data missing
+#   gate_ea_ev: 0.55            # Ea for the Arrhenius plating gate (eV)
+#   gate_max_boost: 3.0         # cap on cold-temperature gate amplification
+#   main_plateau_v_max: 3.45    # end of main charge plateau (V, LFP)
+#
+# short_circuit:
+#   z_thresh: 2.0
+#   isc_k_sigma: 3.0            # S1 excess-k threshold (× fleet MAD)
+#   settling_h: 2.0
+#   min_points: 60
+#   n_q_resample: 500           # S3 dV/dQ resampling points
+#   isc_ea_ev: 0.1              # Ea for ISC T-correction (eV)
+#   s1_min_mad: 1.0e-6          # MAD floors (z-inflation guards)
+#   s2_min_mad: 1.0e-4
+#   s3_min_mad: 1.0e-3
+#   s3_warm_gate_cap: 1.5       # cap on warm-T S3 amplification
+#
+# aggregate:
+#   z_thresh: 2.0               # per-method HIGH threshold in the composite
+#   winsor_z: 8.0               # per-method z clipped to ± this before averaging
+#   high_composite: 2.0         # HIGH: composite > this ...
+#   high_n_methods: 2           #   ... or n_high >= this AND composite >= floor
+#   high_composite_floor: 1.0
+#   elevated_composite: 1.0     # ELEVATED: composite > this ...
+#   elevated_n_methods: 1       #   ... or n_high >= this AND composite >= floor
+#   elevated_composite_floor: 0.5

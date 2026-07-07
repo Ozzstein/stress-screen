@@ -8,7 +8,7 @@ No external dependencies required to open the report.
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -116,16 +116,12 @@ def write_html_report(
     # 1. Header metadata
     # ------------------------------------------------------------------
     pack_id = result.csv_path.stem
-    # Try to extract test date from the filename (P<DDMMYYYY> pattern).
-    # Fall back to today rather than deriving from time_hours (which is
-    # elapsed time starting at 0, not a wall-clock timestamp).
-    import re as _re
-    date_match = _re.search(r"_P(\d{2})(\d{2})(\d{4})_", result.csv_path.name)
-    if date_match:
-        day, month, year = date_match.group(1), date_match.group(2), date_match.group(3)
-        test_date = f"{year}-{month}-{day}"
-    else:
-        test_date = date.today().isoformat()  # fallback — elapsed time ≠ wall-clock
+    # Extract the test date from the filename (_D<DDMMYYYY>_ or legacy
+    # _P<DDMMYYYY>_ pattern). Never fall back to today's date — a wrong date
+    # on a QA document is worse than an explicit "unknown".
+    from stress_screen.serialize import extract_test_date
+    _test_date = extract_test_date(result.csv_path.name)
+    test_date = _test_date.isoformat() if _test_date else "unknown"
 
     config_str = (
         f"{topo.module_count} modules, "

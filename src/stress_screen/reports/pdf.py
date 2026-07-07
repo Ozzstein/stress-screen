@@ -132,14 +132,10 @@ def _page1_title(result: AnalysisResult, styles: dict) -> list:
         f"{topo.active_channels} active cell-groups"
     )
 
-    # Derive test date from filename if possible (P<DDMMYYYY> pattern)
-    import re
-    date_match = re.search(r"_P(\d{2})(\d{2})(\d{4})_", result.csv_path.name)
-    if date_match:
-        day, month, year = date_match.group(1), date_match.group(2), date_match.group(3)
-        test_date = f"{day}/{month}/{year}"
-    else:
-        test_date = "N/A"
+    # Derive test date from filename (_D<DDMMYYYY>_ or legacy _P<DDMMYYYY>_)
+    from stress_screen.serialize import extract_test_date
+    _test_date = extract_test_date(result.csv_path.name)
+    test_date = _test_date.strftime("%d/%m/%Y") if _test_date else "unknown"
 
     generated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

@@ -7,7 +7,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+
+      - name: Run test suite
+        run: pytest -q
+
   build:
+    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +64,21 @@ jobs:
       - name: Smoke-test binary (--help)
         shell: bash
         run: ./dist/${{ matrix.source_name }} --help
+
+      # Full end-to-end smoke test: run the frozen binary on a synthetic pack
+      # and require the verdict lines, HTML+PDF reports (catches missing
+      # Kaleido bundling), and the JSON result to all materialize.
+      - name: Smoke-test binary (end-to-end)
+        shell: bash
+        run: |
+          python -c "from tests.synth import make_synthetic_csv; from pathlib import Path; print(make_synthetic_csv(Path('smoke')))"
+          ./dist/${{ matrix.source_name }} smoke/SynthPack_D01032026_080000_M2.csv --out-dir smoke-out --full && rc=$? || rc=$?
+          echo "exit code: $rc"
+          test "$rc" -eq 0 -o "$rc" -eq 1
+          ls -la smoke-out/
+          test -s smoke-out/SynthPack_D01032026_080000_M2_report.html
+          test -s smoke-out/SynthPack_D01032026_080000_M2_report.pdf
+          test -s smoke-out/SynthPack_D01032026_080000_M2_result.json
 
       - name: Rename binary for release
         shell: bash
