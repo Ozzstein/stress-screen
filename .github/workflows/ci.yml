@@ -29,3 +29,7 @@ jobs:
 
       - name: Run test suite
         run: pytest -q
+        env:
+          # Golden floats were baselined on macOS/arm64; scipy fits differ
+          # slightly per platform. Verdicts are still compared exactly.
+          STRESS_SCREEN_GOLDEN_LOOSE: "1"
