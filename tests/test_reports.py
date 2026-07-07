@@ -7,6 +7,12 @@ from pathlib import Path
 
 from tests.synth import make_synthetic_csv
 
+# Kaleido 0.2.x's headless Chromium deadlocks at startup on Windows CI
+# runners (upstream issue; real Windows desktops are fine). PDF rendering
+# stays covered by the Ubuntu test matrix and the macOS/Linux frozen-binary
+# smoke tests in the release workflow.
+SKIP_PDF = sys.platform == "win32" and os.environ.get("CI") == "true"
+
 
 def test_html_and_pdf_generated(tmp_path):
     """Run the CLI with --out-dir and verify HTML, PDF, and JSON are created."""
@@ -17,22 +23,21 @@ def test_html_and_pdf_generated(tmp_path):
     src_dir = str(Path(__file__).parent.parent / "src")
     env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
 
-    result = subprocess.run(
-        [sys.executable, "-m", "stress_screen", str(csv), "--out-dir", str(out_dir)],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    cmd = [sys.executable, "-m", "stress_screen", str(csv), "--out-dir", str(out_dir)]
+    if SKIP_PDF:
+        cmd.append("--no-pdf")
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert result.returncode in (0, 1), f"Exit code {result.returncode}: {result.stderr}"
 
     html_files = list(out_dir.glob("*.html"))
     pdf_files = list(out_dir.glob("*.pdf"))
     json_files = list(out_dir.glob("*.json"))
     assert len(html_files) == 1, f"Expected 1 HTML file, got {html_files}"
-    assert len(pdf_files) == 1, f"Expected 1 PDF file, got {pdf_files}"
     assert len(json_files) == 1, f"Expected 1 JSON file, got {json_files}"
     assert html_files[0].stat().st_size > 10_000, "HTML file suspiciously small"
-    assert pdf_files[0].stat().st_size > 10_000, "PDF file suspiciously small"
+    if not SKIP_PDF:
+        assert len(pdf_files) == 1, f"Expected 1 PDF file, got {pdf_files}"
+        assert pdf_files[0].stat().st_size > 10_000, "PDF file suspiciously small"
 
     # The report must carry the real test date from the filename — never
     # today's date (the _D<DDMMYYYY>_ fix).
@@ -53,6 +58,7 @@ def test_html_and_pdf_generated(tmp_path):
 
     # PDF gained exec-summary/methodology/cluster-table/flagged-cell pages:
     # 2 modules → 1+2+1+ (2×4) + ≥1 flagged = ≥13 pages
-    pdf_bytes = pdf_files[0].read_bytes()
-    n_pages = pdf_bytes.count(b"/Type /Page") - pdf_bytes.count(b"/Type /Pages")
-    assert n_pages >= 13, f"PDF has only {n_pages} pages"
+    if not SKIP_PDF:
+        pdf_bytes = pdf_files[0].read_bytes()
+        n_pages = pdf_bytes.count(b"/Type /Page") - pdf_bytes.count(b"/Type /Pages")
+        assert n_pages >= 13, f"PDF has only {n_pages} pages"
