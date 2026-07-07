@@ -25,6 +25,12 @@ dev = ["pytest>=8.0"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+# The project venv lives in .venv.nosync (kept out of iCloud sync's reach);
+# it must never leak into distributions. Data files stay out of the sdist too.
+exclude = [".venv.nosync", ".venv", "*.csv", "*_report.html", "*_report.pdf",
+           "*.ipynb", "build", "dist"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/stress_screen"]
 

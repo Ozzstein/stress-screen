@@ -78,12 +78,15 @@ class AnalysisConfig:
 
 
 def find_defaults_file() -> Path:
-    """Locate the bundled analysis_defaults.yaml (same pattern as topology)."""
+    """Locate the bundled analysis_defaults.yaml (same pattern as topology).
+
+    The file ships inside the package (``stress_screen/configs/``) so wheel
+    installs, editable installs, and PyInstaller bundles all resolve it.
+    """
     if getattr(sys, "frozen", False):
         base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
     else:
-        # src/stress_screen/config.py → project root (3 levels up)
-        base = Path(__file__).parent.parent.parent
+        base = Path(__file__).parent
     return base / "configs" / "analysis_defaults.yaml"
 
 

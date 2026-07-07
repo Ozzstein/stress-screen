@@ -7,8 +7,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import sys, os
 
 datas = [
-    ('configs/temp_mapping.yaml', 'configs'),
-    ('configs/analysis_defaults.yaml', 'configs'),
+    ('src/stress_screen/configs/temp_mapping.yaml', 'configs'),
+    ('src/stress_screen/configs/analysis_defaults.yaml', 'configs'),
 ]
 
 # Kaleido static-image engine (kaleido 0.2.x): bundle its Chromium-based

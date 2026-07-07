@@ -201,11 +201,11 @@ stress_screen [-h] [--chem {lfp,nmc,nca}] [--config PATH] [--c-rate X]
 | Flag | Default | Description |
 |---|---|---|
 | `CSV` | — | Path to the tester CSV (semicolon-delimited, comma-decimal). Filename must contain `_M<n>` where `n` is the module count, e.g. `..._M6.csv`. |
-| `--chem {lfp,nmc,nca}` | `lfp` | Chemistry preset (OCV voltage bounds and chemistry-specific parameters; see `configs/analysis_defaults.yaml`). |
-| `--config PATH` | — | YAML file overriding any analysis parameter (thresholds, activation energies, verdict gates, composite weights). Every available key is documented in `configs/analysis_defaults.yaml`. Unknown keys are rejected. |
+| `--chem {lfp,nmc,nca}` | `lfp` | Chemistry preset (OCV voltage bounds and chemistry-specific parameters; see the bundled `analysis_defaults.yaml`). |
+| `--config PATH` | — | YAML file overriding any analysis parameter (thresholds, activation energies, verdict gates, composite weights). Every available key is documented in the bundled `analysis_defaults.yaml` (src/stress_screen/configs/). Unknown keys are rejected. |
 | `--c-rate X` | `0.5` | Cell-level charge C-rate of the test protocol; scales dQ/dV peak detection and thermal noise floors. |
 | `--capacity-ah X` | `2.5` | Nominal cell capacity. |
-| `--mapping PATH` | bundled `configs/temp_mapping.yaml` | Override the temperature sensor → group mapping (see *Temperature sensor layout* below). |
+| `--mapping PATH` | bundled `temp_mapping.yaml` | Override the temperature sensor → group mapping (see *Temperature sensor layout* below). |
 | `--out-dir DIR` | input CSV's directory | Where the HTML / PDF / JSON outputs are written. |
 | `--no-html` / `--no-pdf` / `--no-json` | off | Skip that output. |
 | `--json-out PATH` | `<stem>_result.json` | Write the JSON result to a specific path. |
@@ -403,9 +403,9 @@ src/stress_screen/
     html.py               # HTML report writer (Jinja2)
     pdf.py                # PDF report writer (ReportLab)
     templates/report.html.j2
-configs/
-  temp_mapping.yaml       # Group → sensor-list mapping per topology
-  analysis_defaults.yaml  # Chemistry presets + reference of every tunable key
+  configs/                # Bundled with the package (works in wheel installs)
+    temp_mapping.yaml     # Group → sensor-list mapping per topology
+    analysis_defaults.yaml # Chemistry presets + reference of every tunable key
 scripts/
   composite_ab.py         # Offline legacy-vs-clustered verdict A/B from JSONs
 tests/                    # 130+ unit and integration tests + golden fixture

@@ -33,16 +33,15 @@ def _find_mapping_file(override: Path | None = None) -> Path:
     Search order:
     1. ``override`` (if given)
     2. PyInstaller bundle (``sys._MEIPASS``)
-    3. Development layout: walk up from this file to the project root
+    3. The package's own ``configs/`` directory (works for wheel installs
+       and editable/dev layouts alike)
     """
     if override is not None:
         return override
-    # PyInstaller bundle
     if getattr(sys, "frozen", False):
         base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
     else:
-        # src/stress_screen/topology.py → project root (3 levels up)
-        base = Path(__file__).parent.parent.parent
+        base = Path(__file__).parent
     return base / "configs" / "temp_mapping.yaml"
 
 
