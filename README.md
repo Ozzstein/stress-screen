@@ -10,7 +10,7 @@ Each cell-group is scored by eight methods. Method z-scores are robust (median /
 
 | Method | What it measures | Detects |
 |---|---|---|
-| `ocv_k` | OCV-fit self-discharge rate `k` from `V(t) = V_ocv + V·exp(−k·t)` | Slow voltage decay during rest — primary capacity-loss / leakage signature |
+| `ocv_k` | OCV-fit self-discharge decay slope `k` (mV/h) from `V(t) = V_ocv + a·exp(−t/τ) − k·t` | Slow voltage decay during rest — primary capacity-loss / leakage signature |
 | `thermal_corr` | Pearson r between OCV residuals and cell temperature | Cells whose voltage tracks heat — internal-resistance imbalance |
 | `spread` | Slope of `\|V_cell − V_fleet_median\|` over rest (T-compensated) | Cells diverging from the fleet over time |
 | `cusum` | Two-sided CUSUM alarms on OCV residuals | Step changes / persistent biases the linear fit would miss |
@@ -317,23 +317,39 @@ Single-sensor cells (G1, G8) automatically receive a √2 noise penalty on `ther
 | `10` | Faster still. Borderline cells (composite_z ≈ 0.5) may flip a verdict bucket. |
 | `60+` | **Not recommended.** Coarse time resolution breaks the segmenter; charge cycles can be truncated, causing false ISC NOK verdicts. |
 
-## Output: the HTML report
+## Output: the reports
 
-The HTML report includes:
+Both the HTML report (interactive) and the PDF (archival) carry the same
+content:
 
-1. **Methodology section** — full description of all 8 methods, formulas, and verdict aggregation rules.
-2. **Module summary table** — verdict, flagged cells, and methods fired per module.
-3. **Pack overview** — composite z heatmap across all cells.
-4. **Phase timeline** — charge / discharge / rest visualised on the pack-level current trace.
-5. **Per-module detail** (6 charts each):
-   - OCV fit overlay (rest phase)
-   - dQ/dV incremental capacity (charge phase)
-   - Voltage divergence from fleet median (`spread` method)
-   - Voltage rank percentile over rest (`rank` method)
-   - Temperature traces (rest + charge)
-   - All-method z-score heatmap
-6. **Per-cell method z-score table** — every cell, every method.
-7. **Flagged-cell detail cards** with ISC sub-score breakdown.
+1. **Executive summary** — pack verdict, headline, and one strictly factual
+   finding sentence per flagged cell built from the measured values (fitted
+   k in mV/h, divergence slope, rank statistics, CUSUM alarms, gates).
+2. **Methodology section** — the 8 detectors, the actual fitted model
+   `V(t) = V_ocv + a·exp(−t/τ) − k·t`, and the cluster/gate rules (shared
+   text between HTML and PDF so they cannot drift).
+3. **Module summary table + pack overview heatmap** — composite z per cell
+   with gate-anchored color bands, numeric values, and flagged cells
+   outlined; M1 at the top.
+4. **Phase timeline** — charge / discharge / rest labeled with durations.
+5. **Per-module detail** (6 charts each, all modules):
+   - OCV curves with the fitted decay model overlaid for flagged cells
+     (k and τ in the legend)
+   - dQ/dV incremental capacity with detected extra-peak markers
+   - Voltage divergence from fleet median (display-smoothed; the detector's
+     fitted trend drawn for flagged cells)
+   - Voltage rank percentile with the bottom-20 % band shaded
+   - Temperature traces with the ISC dT/dt slope for flagged cells
+   - Method z-scores grouped by evidence cluster with cluster-score rows
+6. **Per-cell score table** — every cell: composite, per-method z grouped
+   under cluster headers, and cluster scores.
+7. **Flagged-cell detail pages** — finding sentence, detail charts (OCV fit,
+   CUSUM with alarm thresholds, dQ/dV), and the full physical-parameters
+   table (self-discharge, residual dynamics, fleet divergence, all 13
+   li-plating fields, all 9 ISC fields).
+
+The HTML adds a sticky section navigation, and prints cleanly
+(`@media print` light theme).
 
 ## Development
 

@@ -38,3 +38,21 @@ def test_html_and_pdf_generated(tmp_path):
     # today's date (the _D<DDMMYYYY>_ fix).
     html = html_files[0].read_text(encoding="utf-8", errors="replace")
     assert "2026-03-01" in html
+
+    # Report-clarity features: exec summary with a finding sentence for the
+    # injected leak cell, physical units, navigation, print stylesheet.
+    assert 'id="summary"' in html
+    assert "Executive Summary" in html
+    assert "M1/G5" in html and "mV/h" in html
+    assert '<nav class="toc">' in html
+    assert "@media print" in html
+    assert "Physical parameter" in html
+    # correct OCV model formula (the old wrong one must be gone)
+    assert "a·exp(−t/τ)" in html
+    assert "V·exp(−k·t)" not in html
+
+    # PDF gained exec-summary/methodology/cluster-table/flagged-cell pages:
+    # 2 modules → 1+2+1+ (2×4) + ≥1 flagged = ≥13 pages
+    pdf_bytes = pdf_files[0].read_bytes()
+    n_pages = pdf_bytes.count(b"/Type /Page") - pdf_bytes.count(b"/Type /Pages")
+    assert n_pages >= 13, f"PDF has only {n_pages} pages"

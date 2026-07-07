@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from stress_screen.models import AnalysisResult
 from stress_screen.reports.figures import FigureSet, build_figures
+from stress_screen.reports.findings import PackFindings, build_findings
 
 # ---------------------------------------------------------------------------
 # Version string
@@ -77,6 +78,7 @@ def write_html_report(
     top_charge_df: Optional[pd.DataFrame] = None,
     n_parallel: int = 1,
     figures: Optional[FigureSet] = None,
+    findings: Optional[PackFindings] = None,
 ) -> None:
     """Write a standalone HTML report to *out_path*.
 
@@ -103,6 +105,9 @@ def write_html_report(
     figures:
         Pre-built figure set (shared with the PDF writer). Built on demand
         when None.
+    findings:
+        Pre-built findings (shared with the PDF writer). Built on demand
+        when None.
     """
     topo = result.topology
 
@@ -111,6 +116,9 @@ def write_html_report(
             result, rest_cell_df, charge_cell_df, top_df,
             top_charge_df=top_charge_df, n_parallel=n_parallel,
         )
+    if findings is None:
+        findings = build_findings(result)
+    findings_by_channel = {f.channel_index: f for f in findings.cell_findings}
 
     # ------------------------------------------------------------------
     # 1. Header metadata
@@ -185,27 +193,13 @@ def write_html_report(
         flagged_cells_data: list[dict[str, Any]] = []
         for fc in mv.flagged_cells:
             detail_fig = figures.flagged_cell_details[fc.channel_index]
-            isc_mr = next((mr for mr in fc.method_results if mr.method_name == "isc"), None)
-            isc_detail = None
-            if isc_mr:
-                meta = isc_mr.metadata
-                def _fmt(v):
-                    return f"{v:.3f}" if (v == v) else "—"
-                isc_detail = {
-                    "s1_z": _fmt(meta.get("s1_excess_k_z", float("nan"))),
-                    "s1_excess_k": _fmt(meta.get("s1_excess_k", float("nan"))),
-                    "s2_z": _fmt(meta.get("s2_dT_dt_z", float("nan"))),
-                    "s2_slope": _fmt(meta.get("s2_dT_dt_slope", float("nan"))),
-                    "s3_z": _fmt(meta.get("s3_area_deficit_z", float("nan"))),
-                    "s3_area": _fmt(meta.get("s3_dvdq_area", float("nan"))),
-                }
             flagged_cells_data.append(
                 {
                     "label": fc.label,
                     "composite_z": fc.composite_z,
                     "cluster_scores": fc.cluster_scores,
                     "method_results": fc.method_results,
-                    "isc_detail": isc_detail,
+                    "finding": findings_by_channel.get(fc.channel_index),
                     "detail_chart": _render(detail_fig),
                 }
             )
@@ -228,6 +222,8 @@ def write_html_report(
                 "composite_z": cv.composite_z,
                 "verdict": cv.verdict,
                 "method_rows": method_rows,
+                "method_by_name": {r["method_name"]: r for r in method_rows},
+                "cluster_scores": cv.cluster_scores,
             })
 
         method_names = [mr["method_name"] for mr in all_cells_data[0]["method_rows"]] if all_cells_data else []
@@ -251,6 +247,21 @@ def write_html_report(
     # ------------------------------------------------------------------
     # 5. Render Jinja2 template
     # ------------------------------------------------------------------
+    # Cluster layout for the grouped per-cell z table: only methods that
+    # actually ran (present in the first cell's method rows).
+    from stress_screen.analysis.aggregate import CLUSTERS
+    present = set()
+    for mod in module_details:
+        for cell in mod["all_cells"]:
+            present.update(cell["method_by_name"].keys())
+            break
+    cluster_layout = [
+        (cname, [m for m in members if m in present])
+        for cname, members in CLUSTERS.items()
+        if any(m in present for m in members)
+    ]
+    cluster_columns = [(cname, len(methods)) for cname, methods in cluster_layout]
+
     templates_dir = _templates_dir()
     env = Environment(
         loader=FileSystemLoader(str(templates_dir)),
@@ -264,9 +275,12 @@ def write_html_report(
         config_str=config_str,
         report_date=report_date,
         overall_verdict=overall_verdict,
+        findings=findings,
         summary_table_rows=summary_table_rows,
         charts=charts,
         module_details=module_details,
+        cluster_layout=cluster_layout,
+        cluster_columns=cluster_columns,
         version=_VERSION,
     )
 

@@ -47,7 +47,7 @@ class FigureSet:
     pack_heatmap: Any
     phase_timeline: Any
     per_module: dict[int, ModuleFigures] = field(default_factory=dict)
-    #: channel_index → detail card (flagged HIGH cells only; HTML report)
+    #: channel_index → detail card for every flagged cell (HIGH and ELEVATED)
     flagged_cell_details: dict[int, Any] = field(default_factory=dict)
 
 

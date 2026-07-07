@@ -93,7 +93,6 @@
     vertical-align: middle;
   }
   .badge-ok       { background: var(--ok-bg);  color: var(--ok-fg);  border: 1px solid var(--ok-fg); }
-  .badge-marginal { background: #fff3cd;       color: #856404;       border: 1px solid #856404; }
   .badge-nok      { background: var(--nok-bg); color: var(--nok-fg); border: 1px solid var(--nok-fg); }
 
   .chart-grid {
@@ -137,7 +136,6 @@
   tbody tr:hover td { background: var(--surface2); }
 
   .verdict-ok       { background: var(--ok-bg);  color: var(--ok-fg);  font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 4px; white-space: nowrap; }
-  .verdict-marginal { background: #fff3cd;       color: #856404;       font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 4px; white-space: nowrap; }
   .verdict-nok      { background: var(--nok-bg); color: var(--nok-fg); font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 4px; white-space: nowrap; }
 
   .tag {
@@ -237,35 +235,6 @@
   }
   .verdict-rules code { color: var(--accent); font-family: 'Consolas', 'Monaco', monospace; }
 
-  /* ---- ISC sub-score panel ---- */
-  .isc-panel {
-    margin-top: 0.75rem;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
-  }
-  .isc-panel h5 {
-    font-size: 0.78rem; font-weight: 700; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.06em;
-    margin-bottom: 0.6rem;
-  }
-  .isc-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem 1rem;
-  }
-  .isc-sub {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-  }
-  .isc-sub .isc-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; }
-  .isc-sub .isc-z { font-size: 1rem; font-weight: 700; color: var(--text); }
-  .isc-sub .isc-raw { color: var(--text-muted); font-size: 0.75rem; }
-
   /* ---- full-width chart section ---- */
   .chart-section {
     background: var(--surface);
@@ -285,6 +254,103 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-top: 3rem;
+  }
+
+  /* ---- sticky section navigation ---- */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 2.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    font-size: 0.82rem;
+  }
+  nav.toc a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  nav.toc a:hover { color: var(--accent); background: var(--surface2); }
+  nav.toc a.toc-flagged { color: var(--nok-fg); font-weight: 600; }
+  nav.toc a.toc-flagged::before { content: "● "; font-size: 0.6rem; vertical-align: middle; }
+  section { scroll-margin-top: 3.2rem; }
+  .module-section { scroll-margin-top: 3.2rem; }
+
+  /* ---- executive summary ---- */
+  .exec-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+  }
+  .exec-summary .headline {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+  .exec-summary ul { list-style: none; }
+  .exec-summary li {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--surface2);
+    border-radius: 4px;
+    border-left: 3px solid var(--elevated-fg);
+    font-size: 0.9rem;
+  }
+  .exec-summary li.finding-high { border-left-color: var(--nok-fg); }
+  .exec-summary li a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .exec-summary .protocol-note { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.75rem; }
+
+  /* ---- cluster grouping in the z table ---- */
+  .method-table thead tr.cluster-row th {
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 0.68rem;
+  }
+  .method-table td.cluster-score, .method-table th.cluster-score {
+    border-left: 2px solid var(--border);
+    font-weight: 700;
+  }
+
+  /* ---- physical parameters table (flagged cells) ---- */
+  .param-table-wrap { margin-top: 0.9rem; overflow-x: auto; }
+  .param-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .param-table th {
+    background: var(--surface2); color: var(--text-muted);
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.4rem 0.75rem; text-align: left;
+  }
+  .param-table td { padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--border); }
+  .param-table td.param-value { font-weight: 600; white-space: nowrap; }
+  .param-table td.param-z { color: var(--text-muted); white-space: nowrap; }
+  .param-table tr.param-group td {
+    background: var(--bg); color: var(--accent);
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; border-bottom: 1px solid var(--border);
+  }
+
+  /* ---- print ---- */
+  @media print {
+    :root {
+      --bg: #ffffff; --surface: #ffffff; --surface2: #f2f4f8;
+      --border: #c8ccd4; --text: #111111; --text-muted: #555555;
+      --accent: #1a4f9c;
+      --ok-bg: #e8f5ec; --ok-fg: #1a7a3a;
+      --nok-bg: #fbe9e9; --nok-fg: #b00020;
+      --elevated-bg: #fdf3e0; --elevated-fg: #9a6a00;
+    }
+    body { font-size: 11px; }
+    nav.toc { display: none; }
+    .banner { border-bottom-color: var(--border); background: none; }
+    .chart-box, .cell-card, .method-card { break-inside: avoid; }
+    .module-section { break-before: page; }
   }
 </style>
 </head>
@@ -325,25 +391,72 @@
   </div>
 </header>
 
+<!-- =====================================================================
+     SECTION NAVIGATION
+     ===================================================================== -->
+<nav class="toc">
+  <a href="#summary">Summary</a>
+  <a href="#methodology">Methodology</a>
+  <a href="#pack-overview">Pack Overview</a>
+  <a href="#timeline">Timeline</a>
+  {% for mod in module_details %}
+  <a href="#module-{{ mod.module_id }}"
+     {% if mod.verdict == "NOK" %}class="toc-flagged"{% endif %}>M{{ mod.module_id }}</a>
+  {% endfor %}
+</nav>
+
 <div class="container">
+
+  <!-- ==================================================================
+       EXECUTIVE SUMMARY
+       ================================================================== -->
+  <section id="summary">
+    <h2>Executive Summary</h2>
+    <div class="exec-summary">
+      <div class="headline">
+        {% if findings.overall_verdict == "NOK" %}
+          <span class="verdict-nok">NOK</span>
+        {% else %}
+          <span class="verdict-ok">OK</span>
+        {% endif %}
+        &nbsp;{{ findings.headline }}
+      </div>
+      {% if findings.cell_findings %}
+      <ul>
+        {% for f in findings.cell_findings %}
+        <li class="{% if f.verdict == 'HIGH' %}finding-high{% endif %}">
+          <a href="#module-{{ f.module_id }}">{{ f.label }}</a> — {{ f.sentence }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div class="protocol-note">
+        Longest rest segment: {{ "%.1f"|format(findings.rest_duration_h) if findings.rest_duration_h else "—" }} h
+        (protocol requires ≥ 48 h) · z-scores are robust (median/MAD) against this pack's own fleet ·
+        cluster gate = 2.0σ
+      </div>
+    </div>
+  </section>
 
   <!-- ==================================================================
        METHODOLOGY
        ================================================================== -->
-  <section>
+  <section id="methodology">
     <h2>Methodology</h2>
     <div class="methodology">
       <p>
-        Each cell-group is independently scored by <strong>eight detection methods</strong>
+        Each cell-group is scored by <strong>eight detection methods</strong>
         operating on the longest rest segment, the conditioning charge cycle, and pack-level
         temperature data. Each method produces a robust z-score (median/MAD-normalised against
-        the fleet) which is then combined into a <strong>confidence-weighted composite z</strong>.
-        Method names below are detector IDs — <em>not</em> module names.
+        the fleet) which is aggregated <strong>cluster-wise into the composite z</strong>
+        (see verdict rules below). Method names below are detector IDs — <em>not</em> module names.
+        Divergence and rank charts are smoothed with a ~30-min rolling median
+        <em>for display only</em>; detection always runs on raw data.
       </p>
 
       <div class="method-card">
         <h4>ocv_k <span style="color: var(--text-muted); font-weight: 400; font-size: 0.78rem;">— OCV-fit self-discharge rate</span></h4>
-        <div class="descr">Fits each cell's rest voltage to V(t) = V_ocv + V·exp(−k·t) and extracts the self-discharge rate constant <em>k</em>.</div>
+        <div class="descr">Fits each cell's rest voltage to V(t) = V_ocv + a·exp(−t/τ) − k·t and extracts the linear self-discharge decay slope <em>k</em> (reported in mV/h).</div>
         <div class="detects"><strong>Detects:</strong> slow voltage decay during rest — the primary signature of capacity loss or internal leakage.</div>
       </div>
 
@@ -465,7 +578,7 @@
   <!-- ==================================================================
        PACK OVERVIEW CHART
        ================================================================== -->
-  <section>
+  <section id="pack-overview">
     <h2>Pack Overview</h2>
     <div class="chart-section">
       <h3>Composite Z-Score Heatmap</h3>
@@ -476,7 +589,7 @@
   <!-- ==================================================================
        PHASE TIMELINE
        ================================================================== -->
-  <section>
+  <section id="timeline">
     <h2>Phase Timeline</h2>
     <div class="chart-section">
       <h3>Charge / Discharge / Rest</h3>
@@ -491,7 +604,7 @@
     <h2>Per-Module Detail</h2>
 
     {% for mod in module_details %}
-    <div class="module-section">
+    <div class="module-section" id="module-{{ mod.module_id }}">
       <h3>
         Module M{{ mod.module_id }}
         {% if mod.verdict == "NOK" %}
@@ -532,11 +645,21 @@
       <div class="method-table-wrap">
         <table class="method-table">
           <thead>
+            <tr class="cluster-row">
+              <th></th>
+              <th></th>
+              {% for cname, n_methods in cluster_columns %}
+              <th colspan="{{ n_methods + 1 }}" class="cluster-score">{{ cname | replace("_", " ") }}</th>
+              {% endfor %}
+            </tr>
             <tr>
               <th>Cell</th>
               <th>Composite Z</th>
-              {% for mname in mod.method_names %}
-              <th>{{ mname | replace("_", " ") }}</th>
+              {% for cname, methods in cluster_layout %}
+                {% for mname in methods %}
+                <th>{{ mname | replace("_", " ") }}</th>
+                {% endfor %}
+                <th class="cluster-score">Σ</th>
               {% endfor %}
             </tr>
           </thead>
@@ -547,8 +670,18 @@
               <td class="{% if cell.composite_z >= 2.0 %}z-high{% elif cell.composite_z >= 1.0 %}z-elevated{% else %}z-normal{% endif %}">
                 {{ "%.2f" | format(cell.composite_z) }}
               </td>
-              {% for mr in cell.method_rows %}
-              <td class="z-{{ mr.verdict | lower }}">{{ mr.z_str }}</td>
+              {% for cname, methods in cluster_layout %}
+                {% for mname in methods %}
+                  {% set mr = cell.method_by_name.get(mname) %}
+                  {% if mr %}
+                  <td class="z-{{ mr.verdict | lower }}">{{ mr.z_str }}</td>
+                  {% else %}
+                  <td class="z-normal">—</td>
+                  {% endif %}
+                {% endfor %}
+                <td class="cluster-score {% if cell.cluster_scores and cell.cluster_scores.get(cname, 0) >= 2.0 %}z-high{% elif cell.cluster_scores and cell.cluster_scores.get(cname, 0) >= 1.0 %}z-elevated{% else %}z-normal{% endif %}">
+                  {% if cell.cluster_scores and cname in cell.cluster_scores %}{{ "%.2f" | format(cell.cluster_scores[cname]) }}{% else %}—{% endif %}
+                </td>
               {% endfor %}
             </tr>
             {% endfor %}
@@ -578,26 +711,28 @@
             {% endfor %}
           </div>
 
-          {% if cell.isc_detail %}
-          <div class="isc-panel">
-            <h5>ISC Sub-Scores</h5>
-            <div class="isc-grid">
-              <div class="isc-sub">
-                <div class="isc-label">S1 — Excess self-discharge</div>
-                <div class="isc-z">z = {{ cell.isc_detail.s1_z }}</div>
-                <div class="isc-raw">excess k = {{ cell.isc_detail.s1_excess_k }}</div>
-              </div>
-              <div class="isc-sub">
-                <div class="isc-label">S2 — Thermal slope during rest</div>
-                <div class="isc-z">z = {{ cell.isc_detail.s2_z }}</div>
-                <div class="isc-raw">dT/dt = {{ cell.isc_detail.s2_slope }} °C/h</div>
-              </div>
-              <div class="isc-sub">
-                <div class="isc-label">S3 — dV/dQ area deficit</div>
-                <div class="isc-z">z = {{ cell.isc_detail.s3_z }}</div>
-                <div class="isc-raw">area = {{ cell.isc_detail.s3_area }}</div>
-              </div>
-            </div>
+          {% if cell.finding %}
+          <p style="font-size: 0.88rem; margin-bottom: 0.5rem;">{{ cell.finding.sentence }}</p>
+          <div class="param-table-wrap">
+            <table class="param-table">
+              <thead>
+                <tr><th>Physical parameter</th><th>Value</th><th>z</th></tr>
+              </thead>
+              <tbody>
+                {% set ns = namespace(prev_group=None) %}
+                {% for row in cell.finding.param_rows %}
+                {% if row.group != ns.prev_group %}
+                <tr class="param-group"><td colspan="3">{{ row.group }}</td></tr>
+                {% set ns.prev_group = row.group %}
+                {% endif %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td class="param-value">{{ row.value_str }}</td>
+                  <td class="param-z">{{ row.z_str }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
           {% endif %}
 
