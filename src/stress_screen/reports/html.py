@@ -16,17 +16,7 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from stress_screen.models import AnalysisResult
-from stress_screen.reports.charts import (
-    cell_detail_card,
-    divergence_chart,
-    dv_dq_chart,
-    method_zscore_heatmap,
-    ocv_fit_overlay,
-    pack_heatmap,
-    phase_timeline,
-    rank_chart,
-    temperature_chart,
-)
+from stress_screen.reports.figures import FigureSet, build_figures
 
 # ---------------------------------------------------------------------------
 # Version string
@@ -86,6 +76,7 @@ def write_html_report(
     out_path: Path,
     top_charge_df: Optional[pd.DataFrame] = None,
     n_parallel: int = 1,
+    figures: Optional[FigureSet] = None,
 ) -> None:
     """Write a standalone HTML report to *out_path*.
 
@@ -109,8 +100,17 @@ def write_html_report(
         the Q axis for dV/dQ charts. Optional; falls back to sample index.
     n_parallel:
         Number of parallel strings (divides pack current to per-string Q).
+    figures:
+        Pre-built figure set (shared with the PDF writer). Built on demand
+        when None.
     """
     topo = result.topology
+
+    if figures is None:
+        figures = build_figures(
+            result, rest_cell_df, charge_cell_df, top_df,
+            top_charge_df=top_charge_df, n_parallel=n_parallel,
+        )
 
     # ------------------------------------------------------------------
     # 1. Header metadata
@@ -174,8 +174,8 @@ def write_html_report(
         return _fig_to_html_cdn(fig)
 
     charts = {
-        "pack_heatmap": _render(pack_heatmap(result)),
-        "phase_timeline": _render(phase_timeline(top_df, result.segments)),
+        "pack_heatmap": _render(figures.pack_heatmap),
+        "phase_timeline": _render(figures.phase_timeline),
     }
 
     # ------------------------------------------------------------------
@@ -184,25 +184,12 @@ def write_html_report(
     module_details: list[dict[str, Any]] = []
     for mv in result.module_verdicts:
         mid = mv.module_id
-
-        ocv_fig = ocv_fit_overlay(result, mid, rest_cell_df)
-        dvdq_fig = dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel)
-        div_fig = divergence_chart(result, mid, rest_cell_df)
-        rank_fig = rank_chart(result, mid, rest_cell_df)
-        temp_fig = temperature_chart(result, mid, rest_cell_df, charge_cell_df)
-        zscore_fig = method_zscore_heatmap(result, mid)
+        mod_figs = figures.per_module[mid]
 
         # Flagged cell detail cards
         flagged_cells_data: list[dict[str, Any]] = []
         for fc in mv.flagged_cells:
-            detail_fig = cell_detail_card(
-                result,
-                fc.channel_index,
-                rest_cell_df,
-                charge_cell_df,
-                top_charge_df=top_charge_df,
-                n_parallel=n_parallel,
-            )
+            detail_fig = figures.flagged_cell_details[fc.channel_index]
             isc_mr = next((mr for mr in fc.method_results if mr.method_name == "isc"), None)
             isc_detail = None
             if isc_mr:
@@ -253,12 +240,12 @@ def write_html_report(
             {
                 "module_id": mid,
                 "verdict": mv.verdict,
-                "ocv_chart": _render(ocv_fig),
-                "dvdq_chart": _render(dvdq_fig),
-                "divergence_chart": _render(div_fig),
-                "rank_chart": _render(rank_fig),
-                "temperature_chart": _render(temp_fig),
-                "zscore_heatmap": _render(zscore_fig),
+                "ocv_chart": _render(mod_figs.ocv),
+                "dvdq_chart": _render(mod_figs.dvdq),
+                "divergence_chart": _render(mod_figs.divergence),
+                "rank_chart": _render(mod_figs.rank),
+                "temperature_chart": _render(mod_figs.temperature),
+                "zscore_heatmap": _render(mod_figs.zscore_heatmap),
                 "flagged_cells": flagged_cells_data,
                 "all_cells": all_cells_data,
                 "method_names": method_names,

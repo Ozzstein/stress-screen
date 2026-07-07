@@ -10,6 +10,7 @@ and returns two tidy DataFrames:
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -70,31 +71,13 @@ def load_csv(
                 break
 
     # ------------------------------------------------------------------
-    # 2. Read CSV.
-    #    - sep=';'           semicolon delimiter
-    #    - decimal=','       European decimal separator
-    #    - comment='#'       skip in-body comment lines
-    #    - index_col=False   prevent pandas from treating the first column
-    #                        as the index (the data rows have one trailing
-    #                        semicolon, giving them one extra field vs header)
+    # 2. Read CSV (fast C-engine path; legacy python-engine escape hatch
+    #    via STRESS_SCREEN_LEGACY_LOADER=1).
     # ------------------------------------------------------------------
-    df = pd.read_csv(
-        filepath,
-        sep=";",
-        decimal=",",
-        skiprows=skip_rows,
-        comment="#",
-        index_col=False,
-        skipinitialspace=True,
-        engine="python",
-        encoding="utf-8",
-    )
-
-    # Strip whitespace from column names (some have trailing spaces in file)
-    df.columns = df.columns.str.strip()
-
-    # Drop fully-empty trailing columns (artifact of trailing semicolons)
-    df = df.dropna(axis=1, how="all")
+    if os.environ.get("STRESS_SCREEN_LEGACY_LOADER") == "1":
+        df = _read_raw_legacy(filepath, skip_rows)
+    else:
+        df = _read_raw(filepath, skip_rows)
 
     REQUIRED_COLS = {"Current", "Voltage", "SOC %", "Warning", "Fault"}
     missing = REQUIRED_COLS - set(df.columns)
@@ -344,6 +327,89 @@ def remap_temperatures(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _read_raw(filepath: Path, skip_rows: int) -> pd.DataFrame:
+    """Read the tester CSV with the pandas C engine (~10-20x faster than the
+    python engine on 100-200 MB files).
+
+    The tester writes a trailing semicolon on every data row, giving data
+    rows one extra field vs the header. The C engine hard-errors on that
+    mismatch (in either direction), so the header and first data row are
+    inspected to decide whether a throwaway column name must be appended
+    for the phantom field.
+    """
+    header = pd.read_csv(
+        filepath,
+        sep=";",
+        skiprows=skip_rows,
+        nrows=0,
+        engine="c",
+        encoding="utf-8",
+        encoding_errors="replace",
+    )
+    names = [str(c).strip() for c in header.columns]
+
+    # Count fields in the first data row (tester format has no quoting).
+    first_data_fields = len(names)
+    with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+        seen_header = False
+        for i, line in enumerate(fh):
+            if i < skip_rows or line.startswith("#") or not line.strip():
+                continue
+            if not seen_header:
+                seen_header = True
+                continue
+            first_data_fields = line.rstrip("\r\n").count(";") + 1
+            break
+    if first_data_fields > len(names):
+        names = [*names, *(f"_trailing_{i}" for i in range(first_data_fields - len(names)))]
+    # Real columns only: a trailing semicolon in the header line shows up as
+    # an empty/"Unnamed" column — exclude it (and any phantom data fields)
+    # from the parse via usecols.
+    wanted = [
+        c for c in names
+        if c and not c.startswith("Unnamed") and not c.startswith("_trailing_")
+    ]
+
+    str_cols = {wanted[0], "Warning", "Fault"}
+    dtype = {c: str for c in wanted if c in str_cols}
+
+    df = pd.read_csv(
+        filepath,
+        sep=";",
+        decimal=",",
+        header=None,
+        names=names,
+        usecols=wanted,         # drop the phantom trailing field pre-parse
+        dtype=dtype,
+        skiprows=skip_rows + 1,
+        comment="#",
+        skipinitialspace=True,
+        engine="c",
+        encoding="utf-8",
+        encoding_errors="replace",
+    )
+    return df
+
+
+def _read_raw_legacy(filepath: Path, skip_rows: int) -> pd.DataFrame:
+    """Original python-engine reader (escape hatch, one release only)."""
+    df = pd.read_csv(
+        filepath,
+        sep=";",
+        decimal=",",
+        skiprows=skip_rows,
+        comment="#",
+        index_col=False,
+        skipinitialspace=True,
+        engine="python",
+        encoding="utf-8",
+    )
+    # Strip whitespace from column names (some have trailing spaces in file)
+    df.columns = df.columns.str.strip()
+    # Drop fully-empty trailing columns (artifact of trailing semicolons)
+    return df.dropna(axis=1, how="all")
+
+
 def _parse_time_to_hours(time_series: pd.Series) -> pd.Series:
     """
     Convert a Series of timestamp strings to elapsed-hours from the first row.
@@ -381,13 +447,15 @@ def _parse_time_to_hours(time_series: pd.Series) -> pd.Series:
             + parsed.dt.second
         ).astype(float)
 
-        # Cumulative correction for midnight crossings
-        arr = seconds.values.copy()
-        offset = 0.0
-        for i in range(1, len(arr)):
-            if arr[i] + offset < arr[i - 1]:
-                offset += 86400.0
-            arr[i] += offset
+        # Cumulative correction for midnight crossings: every time the raw
+        # seconds-since-midnight value decreases, the clock wrapped — shift
+        # the remainder of the series forward by 24 h. Vectorised equivalent
+        # of the old per-row loop (each wrap adds one cumulative 86400 s
+        # offset from that row onward).
+        arr = seconds.values.astype(float)
+        if len(arr) > 1:
+            wraps = np.concatenate([[0.0], (np.diff(arr) < 0).astype(float)])
+            arr = arr + 86400.0 * np.cumsum(wraps)
 
         elapsed = pd.Series((arr - arr[0]) / 3600.0, index=time_series.index)
 

@@ -438,12 +438,23 @@ def _run(args: argparse.Namespace) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = csv_path.stem
 
+    # Build every Plotly figure exactly once; both report writers share them.
+    figures = None
+    if not args.no_html or not args.no_pdf:
+        from stress_screen.reports.figures import build_figures
+        prog.stage("Building report figures...")
+        figures = build_figures(
+            result, rest_cell_df, charge_cell_df, top_df,
+            top_charge_df=charge_top_df, n_parallel=topology.parallel,
+        )
+
     if not args.no_html:
         from stress_screen.reports.html import write_html_report
         html_path = out_dir / f"{stem}_report.html"
         prog.stage(f"Writing HTML report -> {html_path}")
         write_html_report(result, rest_cell_df, charge_cell_df, top_df, html_path,
-                          top_charge_df=charge_top_df, n_parallel=topology.parallel)
+                          top_charge_df=charge_top_df, n_parallel=topology.parallel,
+                          figures=figures)
         if not args.quiet:
             print(f"HTML report: {html_path}")
 
@@ -452,7 +463,8 @@ def _run(args: argparse.Namespace) -> None:
         pdf_path = out_dir / f"{stem}_report.pdf"
         prog.stage(f"Writing PDF report -> {pdf_path}")
         write_pdf_report(result, rest_cell_df, charge_cell_df, top_df, pdf_path,
-                         top_charge_df=charge_top_df, n_parallel=topology.parallel)
+                         top_charge_df=charge_top_df, n_parallel=topology.parallel,
+                         figures=figures)
         if not args.quiet:
             print(f"PDF report:  {pdf_path}")
 

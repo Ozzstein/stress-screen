@@ -33,16 +33,7 @@ from reportlab.platypus import (
 )
 
 from stress_screen.models import AnalysisResult
-from stress_screen.reports.charts import (
-    divergence_chart,
-    dv_dq_chart,
-    method_zscore_heatmap,
-    ocv_fit_overlay,
-    pack_heatmap,
-    phase_timeline,
-    rank_chart,
-    temperature_chart,
-)
+from stress_screen.reports.figures import FigureSet, build_figures
 
 
 # ---------------------------------------------------------------------------
@@ -259,14 +250,13 @@ def _page2_module_table(result: AnalysisResult, styles: dict) -> list:
 
 
 def _page_pack_heatmap(
-    result: AnalysisResult,
+    fig,
     page_w: float,
     page_h: float,
     margin: float,
     styles: dict,
 ) -> list:
     """Full-page pack heatmap."""
-    fig = pack_heatmap(result)
     usable_w = page_w - 2 * margin
     usable_h = page_h - 2 * margin - 2 * cm  # leave room for heading
 
@@ -280,15 +270,13 @@ def _page_pack_heatmap(
 
 
 def _page_phase_timeline(
-    result: AnalysisResult,
-    top_df: pd.DataFrame,
+    fig,
     page_w: float,
     page_h: float,
     margin: float,
     styles: dict,
 ) -> list:
     """Full-page phase timeline."""
-    fig = phase_timeline(top_df, result.segments)
     usable_w = page_w - 2 * margin
     usable_h = page_h - 2 * margin - 2 * cm
 
@@ -303,14 +291,11 @@ def _page_phase_timeline(
 
 def _pages_per_module(
     result: AnalysisResult,
-    rest_cell_df: pd.DataFrame,
-    charge_cell_df: pd.DataFrame,
+    figures: FigureSet,
     page_w: float,
     page_h: float,
     margin: float,
     styles: dict,
-    top_charge_df: "pd.DataFrame | None" = None,
-    n_parallel: int = 1,
 ) -> list:
     """Six charts across three pages for each module.
 
@@ -324,34 +309,30 @@ def _pages_per_module(
 
     for mv in result.module_verdicts:
         mid = mv.module_id
+        mod_figs = figures.per_module[mid]
 
         # --- Page 1: rest-phase voltage charts ---
         flowables.append(Paragraph(f"Module M{mid} — Rest Phase Analysis", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
-        flowables.append(_fig_to_image(ocv_fit_overlay(result, mid, rest_cell_df), usable_w, chart_h))
+        flowables.append(_fig_to_image(mod_figs.ocv, usable_w, chart_h))
         flowables.append(Spacer(1, 0.3 * cm))
-        flowables.append(_fig_to_image(divergence_chart(result, mid, rest_cell_df), usable_w, chart_h))
+        flowables.append(_fig_to_image(mod_figs.divergence, usable_w, chart_h))
         flowables.append(PageBreak())
 
         # --- Page 2: charge-phase + rank charts ---
         flowables.append(Paragraph(f"Module M{mid} — Charge Phase &amp; Rank Analysis", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
-        flowables.append(_fig_to_image(
-            dv_dq_chart(result, mid, charge_cell_df, top_charge_df=top_charge_df, n_parallel=n_parallel),
-            usable_w, chart_h,
-        ))
+        flowables.append(_fig_to_image(mod_figs.dvdq, usable_w, chart_h))
         flowables.append(Spacer(1, 0.3 * cm))
-        flowables.append(_fig_to_image(rank_chart(result, mid, rest_cell_df), usable_w, chart_h))
+        flowables.append(_fig_to_image(mod_figs.rank, usable_w, chart_h))
         flowables.append(PageBreak())
 
         # --- Page 3: temperature + method z-score overview ---
         flowables.append(Paragraph(f"Module M{mid} — Temperature &amp; Method Overview", styles["h2"]))
         flowables.append(Spacer(1, 0.2 * cm))
-        flowables.append(_fig_to_image(
-            temperature_chart(result, mid, rest_cell_df, charge_cell_df), usable_w, chart_h,
-        ))
+        flowables.append(_fig_to_image(mod_figs.temperature, usable_w, chart_h))
         flowables.append(Spacer(1, 0.3 * cm))
-        flowables.append(_fig_to_image(method_zscore_heatmap(result, mid), usable_w, chart_h))
+        flowables.append(_fig_to_image(mod_figs.zscore_heatmap, usable_w, chart_h))
         flowables.append(PageBreak())
 
     return flowables
@@ -369,6 +350,7 @@ def write_pdf_report(
     out_path: Path,
     top_charge_df: "pd.DataFrame | None" = None,
     n_parallel: int = 1,
+    figures: "FigureSet | None" = None,
 ) -> None:
     """Write a PDF report to *out_path*.
 
@@ -385,9 +367,18 @@ def write_pdf_report(
         columns, covering the full test duration.
     out_path:
         Destination path; parent directory must exist.
+    figures:
+        Pre-built figure set (shared with the HTML writer). Built on demand
+        when None.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if figures is None:
+        figures = build_figures(
+            result, rest_cell_df, charge_cell_df, top_df,
+            top_charge_df=top_charge_df, n_parallel=n_parallel,
+        )
 
     styles = _make_styles()
 
@@ -423,16 +414,12 @@ def write_pdf_report(
     story += _page2_module_table(result, styles)
 
     # Page 3 — pack heatmap
-    story += _page_pack_heatmap(result, PAGE_W, PAGE_H, MARGIN, styles)
+    story += _page_pack_heatmap(figures.pack_heatmap, PAGE_W, PAGE_H, MARGIN, styles)
 
     # Page 4 — phase timeline
-    story += _page_phase_timeline(result, top_df, PAGE_W, PAGE_H, MARGIN, styles)
+    story += _page_phase_timeline(figures.phase_timeline, PAGE_W, PAGE_H, MARGIN, styles)
 
     # Pages 5+ — per-module charts
-    story += _pages_per_module(
-        result, rest_cell_df, charge_cell_df,
-        PAGE_W, PAGE_H, MARGIN, styles,
-        top_charge_df=top_charge_df, n_parallel=n_parallel,
-    )
+    story += _pages_per_module(result, figures, PAGE_W, PAGE_H, MARGIN, styles)
 
     doc.build(story)

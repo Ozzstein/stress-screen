@@ -111,6 +111,21 @@ def test_double_midnight_rollover():
     assert hours.iloc[3] == pytest.approx(26.0)
 
 
+def test_c_engine_matches_legacy_loader(tmp_path, monkeypatch):
+    """The fast C-engine path must produce identical frames to the legacy
+    python-engine path (STRESS_SCREEN_LEGACY_LOADER=1 escape hatch)."""
+    from tests.synth import make_synthetic_csv
+
+    p = make_synthetic_csv(tmp_path)
+    monkeypatch.delenv("STRESS_SCREEN_LEGACY_LOADER", raising=False)
+    top_new, cell_new = load_csv(p)
+    monkeypatch.setenv("STRESS_SCREEN_LEGACY_LOADER", "1")
+    top_old, cell_old = load_csv(p)
+
+    pd.testing.assert_frame_equal(top_new, top_old)
+    pd.testing.assert_frame_equal(cell_new, cell_old)
+
+
 def test_synthetic_fixture_roundtrip(tmp_path):
     """The synthetic fixture must load with the expected shape."""
     from tests.synth import make_synthetic_csv
