@@ -1,10 +1,10 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "tool_version": "0.1.0",
-  "generated_at": "2026-07-07T12:51:48.044806+00:00",
+  "generated_at": "2026-07-07T13:08:41.725233+00:00",
   "input": {
     "csv_name": "SynthPack_D01032026_080000_M2.csv",
-    "csv_path": "/private/var/folders/q8/2z6j2xz95sd5qh5v3qm27c7m0000gn/T/pytest-of-ozzstein/pytest-495/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
+    "csv_path": "/private/var/folders/q8/2z6j2xz95sd5qh5v3qm27c7m0000gn/T/pytest-of-ozzstein/pytest-504/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
     "file_size_bytes": 534573,
     "pack_id": "SynthPack",
     "test_date": "2026-03-01",
@@ -72,6 +72,15 @@
       "elevated_composite": 1.0,
       "elevated_n_methods": 1,
       "elevated_composite_floor": 0.5
+    },
+    "composite": {
+      "mode": "clustered",
+      "reduce": "mean",
+      "weight_self_discharge": 1.0,
+      "weight_residual_dynamics": 1.0,
+      "weight_fleet_divergence": 1.0,
+      "weight_li_plating": 1.0,
+      "weight_isc": 1.0
     }
   },
   "topology": {
@@ -108,8 +117,16 @@
           "channel_index": 0,
           "label": "M1/G1",
           "group_in_module": 1,
-          "composite_z": 0.02067469577577774,
-          "n_methods_high": 1,
+          "composite_z": -1.5405334428877233e-05,
+          "composite_z_legacy": 0.02067469577577774,
+          "cluster_scores": {
+            "self_discharge": -0.2644991574396139,
+            "residual_dynamics": 1.5740507743752414,
+            "fleet_divergence": -1.1440770240572613,
+            "li_plating": -0.19169662158031564,
+            "isc": 0.026145002029804954
+          },
+          "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
             {
@@ -213,7 +230,15 @@
           "channel_index": 1,
           "label": "M1/G2",
           "group_in_module": 2,
-          "composite_z": -0.7641400620433558,
+          "composite_z": -0.6509242823326702,
+          "composite_z_legacy": -0.7641400620433558,
+          "cluster_scores": {
+            "self_discharge": -1.4862158609975449,
+            "residual_dynamics": -0.22134018259986354,
+            "fleet_divergence": -1.1509430410860872,
+            "li_plating": -0.33284648951640816,
+            "isc": -0.06327583746344707
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -318,7 +343,15 @@
           "channel_index": 2,
           "label": "M1/G3",
           "group_in_module": 3,
-          "composite_z": -0.12039155310769688,
+          "composite_z": -0.20746943476431662,
+          "composite_z_legacy": -0.12039155310769688,
+          "cluster_scores": {
+            "self_discharge": 0.5258998530439327,
+            "residual_dynamics": -0.11443976054434252,
+            "fleet_divergence": -0.3372453435395821,
+            "li_plating": -0.04191414829444448,
+            "isc": -1.0696477744871469
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -423,7 +456,15 @@
           "channel_index": 3,
           "label": "M1/G4",
           "group_in_module": 4,
-          "composite_z": -0.3705431939078226,
+          "composite_z": -0.4123381282470281,
+          "composite_z_legacy": -0.3705431939078226,
+          "cluster_scores": {
+            "self_discharge": -0.08305542509242159,
+            "residual_dynamics": -0.6443788688633838,
+            "fleet_divergence": -0.17522061607163486,
+            "li_plating": -0.2872401014902495,
+            "isc": -0.8717956297174506
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -528,8 +569,16 @@
           "channel_index": 4,
           "label": "M1/G5",
           "group_in_module": 5,
-          "composite_z": 4.38370106603818,
-          "n_methods_high": 5,
+          "composite_z": 4.870724565427173,
+          "composite_z_legacy": 4.38370106603818,
+          "cluster_scores": {
+            "self_discharge": 8.0,
+            "residual_dynamics": 0.3295810484873538,
+            "fleet_divergence": 8.0,
+            "li_plating": 0.024041778648509662,
+            "isc": 8.0
+          },
+          "n_methods_high": 3,
           "verdict": "HIGH",
           "methods": [
             {
@@ -633,8 +682,16 @@
           "channel_index": 5,
           "label": "M1/G6",
           "group_in_module": 6,
-          "composite_z": 0.16981517082413466,
-          "n_methods_high": 1,
+          "composite_z": 0.12713198475719048,
+          "composite_z_legacy": 0.16981517082413466,
+          "cluster_scores": {
+            "self_discharge": -0.6904550577327606,
+            "residual_dynamics": 1.1854479645206932,
+            "fleet_divergence": 0.2278685360191925,
+            "li_plating": -0.048747060919920995,
+            "isc": -0.0384544581012518
+          },
+          "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
             {
@@ -738,7 +795,15 @@
           "channel_index": 6,
           "label": "M1/G7",
           "group_in_module": 7,
-          "composite_z": 0.1832675058355474,
+          "composite_z": 0.18745642399912305,
+          "composite_z_legacy": 0.1832675058355474,
+          "cluster_scores": {
+            "self_discharge": 0.8674269956432095,
+            "residual_dynamics": -0.7162679313901219,
+            "fleet_divergence": 0.3776988624356767,
+            "li_plating": -0.10539136794934406,
+            "isc": 0.513815561256195
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -843,7 +908,15 @@
           "channel_index": 7,
           "label": "M1/G8",
           "group_in_module": 8,
-          "composite_z": 0.3830407958926419,
+          "composite_z": 0.3368970657689918,
+          "composite_z_legacy": 0.3830407958926419,
+          "cluster_scores": {
+            "self_discharge": 0.6585264147192733,
+            "residual_dynamics": 0.27237744688175514,
+            "fleet_divergence": 0.4489371766951478,
+            "li_plating": 0.018363359408992197,
+            "isc": 0.28628093113979053
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -954,7 +1027,15 @@
           "channel_index": 8,
           "label": "M2/G1",
           "group_in_module": 1,
-          "composite_z": -0.13026915451191856,
+          "composite_z": -0.2502519288672639,
+          "composite_z_legacy": -0.13026915451191856,
+          "cluster_scores": {
+            "self_discharge": 0.39329980206773585,
+            "residual_dynamics": -0.13672531699617008,
+            "fleet_divergence": -0.04746807683059442,
+            "li_plating": -0.388811540879486,
+            "isc": -1.071554511697805
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -1059,7 +1140,15 @@
           "channel_index": 9,
           "label": "M2/G2",
           "group_in_module": 2,
-          "composite_z": -0.828849044786719,
+          "composite_z": -0.8067853138168486,
+          "composite_z_legacy": -0.828849044786719,
+          "cluster_scores": {
+            "self_discharge": -1.101263028691493,
+            "residual_dynamics": -0.06541723055904486,
+            "fleet_divergence": -1.4301855299589714,
+            "li_plating": -0.3777747250205922,
+            "isc": -1.0592860548541412
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -1164,7 +1253,15 @@
           "channel_index": 10,
           "label": "M2/G3",
           "group_in_module": 3,
-          "composite_z": -0.1783286472580818,
+          "composite_z": -0.25173810596554064,
+          "composite_z_legacy": -0.1783286472580818,
+          "cluster_scores": {
+            "self_discharge": -0.43082178357234424,
+            "residual_dynamics": -0.019203040391160553,
+            "fleet_divergence": 0.2820861757265535,
+            "li_plating": -0.17142255305764295,
+            "isc": -0.9193293285331089
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -1269,8 +1366,16 @@
           "channel_index": 11,
           "label": "M2/G4",
           "group_in_module": 4,
-          "composite_z": -0.08030461782358217,
-          "n_methods_high": 1,
+          "composite_z": -0.027760145653052154,
+          "composite_z_legacy": -0.08030461782358217,
+          "cluster_scores": {
+            "self_discharge": -1.4566329933220932,
+            "residual_dynamics": 0.44417615999156307,
+            "fleet_divergence": 0.5088206190071338,
+            "li_plating": 0.2014559111480628,
+            "isc": 0.16337957491007274
+          },
+          "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
             {
@@ -1374,8 +1479,16 @@
           "channel_index": 12,
           "label": "M2/G5",
           "group_in_module": 5,
-          "composite_z": -0.33676329697638313,
-          "n_methods_high": 1,
+          "composite_z": -0.20612299791886285,
+          "composite_z_legacy": -0.33676329697638313,
+          "cluster_scores": {
+            "self_discharge": -1.2428991178373967,
+            "residual_dynamics": -0.3702192787423667,
+            "fleet_divergence": -0.05037298963698733,
+            "li_plating": 0.58817027936702,
+            "isc": 0.0447061172554164
+          },
+          "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
             {
@@ -1479,7 +1592,15 @@
           "channel_index": 13,
           "label": "M2/G6",
           "group_in_module": 6,
-          "composite_z": 0.006654382026807154,
+          "composite_z": 0.09336759945226737,
+          "composite_z_legacy": 0.006654382026807154,
+          "cluster_scores": {
+            "self_discharge": 0.08305542509242159,
+            "residual_dynamics": -0.1594130225997191,
+            "fleet_divergence": -0.3372453435395821,
+            "li_plating": 0.8518068310464251,
+            "isc": 0.028634107261791327
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -1584,7 +1705,15 @@
           "channel_index": 14,
           "label": "M2/G7",
           "group_in_module": 7,
-          "composite_z": 0.012817711497301265,
+          "composite_z": 0.07560854281246235,
+          "composite_z_legacy": 0.012817711497301265,
+          "cluster_scores": {
+            "self_discharge": 0.23757697537809536,
+            "residual_dynamics": -0.17583265392241476,
+            "fleet_divergence": -0.3372453435395821,
+            "li_plating": 0.6133459270830408,
+            "isc": 0.04019780906317239
+          },
           "n_methods_high": 0,
           "verdict": "NORMAL",
           "methods": [
@@ -1689,7 +1818,15 @@
           "channel_index": 15,
           "label": "M2/G8",
           "group_in_module": 8,
-          "composite_z": 0.9207264308334713,
+          "composite_z": 0.8208800279386923,
+          "composite_z_legacy": 0.9207264308334713,
+          "cluster_scores": {
+            "self_discharge": 0.8052838418354534,
+            "residual_dynamics": 0.09489886652660193,
+            "fleet_divergence": 2.361228598612253,
+            "li_plating": 0.8716229399803257,
+            "isc": -0.02863410726117281
+          },
           "n_methods_high": 1,
           "verdict": "ELEVATED",
           "methods": [

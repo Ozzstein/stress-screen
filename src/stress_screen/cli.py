@@ -98,6 +98,12 @@ def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False)
         if verbose and mv.flagged_cells:
             for fc in mv.flagged_cells:
                 print(f"    {fc.label}  composite_z={fc.composite_z:.3f}")
+                if fc.cluster_scores:
+                    clusters_str = "  ".join(
+                        f"{name}={score:.2f}"
+                        for name, score in fc.cluster_scores.items()
+                    )
+                    print(f"      clusters: {clusters_str}")
                 for mr in fc.method_results:
                     z_str = f"{mr.z_score:.3f}" if mr.z_score == mr.z_score else "NaN"
                     print(f"      {mr.method_name:20s}  z={z_str:>8s}  [{mr.verdict}]")
@@ -125,11 +131,67 @@ def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False)
 # Main entry point
 # ---------------------------------------------------------------------------
 
+#: Registered subcommands. Anything else as the first argument (a CSV path,
+#: a flag, nothing at all) is treated as an implicit "run" — so the historical
+#: `stress_screen file.csv --chem nmc` invocation works forever.
+_SUBCOMMANDS = {"run", "calibrate"}
+
+
 def main() -> None:
-    p = argparse.ArgumentParser(
+    argv = sys.argv[1:]
+    if not argv or argv[0] not in _SUBCOMMANDS:
+        argv = ["run", *argv]
+
+    parser = argparse.ArgumentParser(
         prog="stress_screen",
         description="Battery pack stress-test module screener",
     )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    run_p = sub.add_parser(
+        "run",
+        help="Analyse a tester CSV and produce verdicts + reports (default)",
+        description="Battery pack stress-test module screener",
+    )
+    _add_run_arguments(run_p)
+
+    cal_p = sub.add_parser(
+        "calibrate",
+        help="Score past JSON results against labeled ground-truth outcomes",
+        description=(
+            "Join *_result.json files to a labels CSV "
+            "(pack_id;module_id;group;outcome) and report confusion matrices, "
+            "per-method/per-cluster separation power, and an optional "
+            "threshold sweep."
+        ),
+    )
+    cal_p.add_argument("--results", type=Path, required=True,
+                       help="Directory containing *_result.json files")
+    cal_p.add_argument("--labels", type=Path, required=True,
+                       help="Labels CSV: pack_id;module_id;group;outcome")
+    cal_p.add_argument("--sweep", action="store_true",
+                       help="Sweep composite_z thresholds and suggest an operating point")
+
+    args = parser.parse_args(argv)
+
+    if args.command == "calibrate":
+        _cmd_calibrate(args)
+    else:
+        _cmd_run(args)
+
+
+def _cmd_calibrate(args: argparse.Namespace) -> None:
+    from stress_screen.calibrate import run_calibration
+
+    try:
+        print(run_calibration(args.results, args.labels, sweep=args.sweep))
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(0)
+
+
+def _add_run_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "csv",
         type=Path,
@@ -214,8 +276,9 @@ def main() -> None:
              "result summary, and report-path lines). By default only the "
              "per-module verdict lines are printed.",
     )
-    args = p.parse_args()
 
+
+def _cmd_run(args: argparse.Namespace) -> None:
     # Default behaviour is terse: only per-module verdict lines. Pass --full
     # to opt into the legacy header + summary + report-path output.
     args.quiet = not args.full
@@ -415,6 +478,7 @@ def _run(args: argparse.Namespace) -> None:
     module_verdicts = aggregate(
         rest_results, li_results, topology,
         isc_results=isc_results, params=config.aggregate,
+        composite=config.composite,
     )
 
     result = AnalysisResult(

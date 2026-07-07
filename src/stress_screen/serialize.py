@@ -59,7 +59,10 @@ import numpy as np
 
 from stress_screen.models import AnalysisResult
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+# v2 (additive): per-cell "cluster_scores" and "composite_z_legacy";
+#     "composite_z" is the official (mode-selected) composite.
+# v1: initial schema.
 
 #: Filename date components: newer tester firmware writes ``_D<DDMMYYYY>_``
 #: (optionally followed by ``_HHMMSS``); older files use ``_P<DDMMYYYY>_``.
@@ -191,6 +194,8 @@ def result_to_dict(
                 "label": cv.label,
                 "group_in_module": _jsonable(cv.group_in_module),
                 "composite_z": _jsonable(cv.composite_z),
+                "composite_z_legacy": _jsonable(cv.composite_z_legacy),
+                "cluster_scores": _jsonable(cv.cluster_scores),
                 "n_methods_high": _jsonable(cv.n_methods_high),
                 "verdict": cv.verdict,
                 "methods": [

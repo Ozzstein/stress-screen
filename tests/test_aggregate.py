@@ -54,8 +54,9 @@ def test_composite_does_not_clip_healthy_negative_z_to_zero():
 
 
 def test_composite_weights_methods_by_confidence():
-    """Methods that publish a `confidence` metadata field should be weighted
-    accordingly. A high-confidence z=4 should dominate low-confidence z=0s."""
+    """LEGACY MODE ONLY: methods that publish a `confidence` metadata field
+    are weighted accordingly. The clustered composite (default) uses explicit
+    per-cluster config weights instead and ignores the confidence hook."""
     n = 8
     rest_results = {}
     li_results = {}
@@ -80,8 +81,11 @@ def test_composite_weights_methods_by_confidence():
             li_results[ch] = MethodResult("li_plating", 0.0, "NORMAL",
                                           metadata={"confidence": 1.0})
 
+    from stress_screen.analysis.aggregate import CompositeParams
+
     topo = derive_topology(n, 1)
-    verdicts = aggregate(rest_results, li_results, topo)
+    verdicts = aggregate(rest_results, li_results, topo,
+                         composite=CompositeParams(mode="legacy"))
     ch0_cv = next(cv for mv in verdicts for cv in mv.all_cells if cv.channel_index == 0)
     # Weighted mean ch0: (4*1.0 + 0*0.1*6) / (1.0 + 6*0.1) = 4/1.6 = 2.5
     # Unweighted (broken) would give: 4/7 ≈ 0.57

@@ -208,6 +208,7 @@ def write_html_report(
                 {
                     "label": fc.label,
                     "composite_z": fc.composite_z,
+                    "cluster_scores": fc.cluster_scores,
                     "method_results": fc.method_results,
                     "isc_detail": isc_detail,
                     "detail_chart": _render(detail_fig),

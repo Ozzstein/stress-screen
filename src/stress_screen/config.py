@@ -38,7 +38,7 @@ from typing import Any
 
 import yaml
 
-from stress_screen.analysis.aggregate import AggregateParams
+from stress_screen.analysis.aggregate import AggregateParams, CompositeParams
 from stress_screen.analysis.li_plating import LiPlatingParams
 from stress_screen.analysis.protocol import ProtocolMetadata
 from stress_screen.analysis.rest import RestParams
@@ -53,6 +53,7 @@ _SECTION_TYPES: dict[str, type] = {
     "li_plating": LiPlatingParams,
     "short_circuit": ShortCircuitParams,
     "aggregate": AggregateParams,
+    "composite": CompositeParams,
 }
 
 
@@ -65,6 +66,7 @@ class AnalysisConfig:
     li_plating: LiPlatingParams = field(default_factory=LiPlatingParams)
     short_circuit: ShortCircuitParams = field(default_factory=ShortCircuitParams)
     aggregate: AggregateParams = field(default_factory=AggregateParams)
+    composite: CompositeParams = field(default_factory=CompositeParams)
     preset: str = "lfp"
 
     def to_dict(self) -> dict[str, Any]:
@@ -181,5 +183,16 @@ def load_config(
 
     if cli_overrides:
         config = _apply_sections(config, cli_overrides, "CLI flags")
+
+    if config.composite.mode not in ("clustered", "legacy"):
+        raise ValueError(
+            f"composite.mode must be 'clustered' or 'legacy', "
+            f"got {config.composite.mode!r}"
+        )
+    if config.composite.reduce not in ("max", "mean"):
+        raise ValueError(
+            f"composite.reduce must be 'max' or 'mean', "
+            f"got {config.composite.reduce!r}"
+        )
 
     return config

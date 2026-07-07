@@ -117,10 +117,15 @@ class CellVerdict:
     channel_index: int   # 0-based global channel index
     module_id: int       # 1-based module
     group_in_module: int # 1-based group within module
-    composite_z: float
-    n_methods_high: int
+    composite_z: float   # official composite (mode-selected in aggregate)
+    n_methods_high: int  # HIGH count: methods (legacy) or clusters (clustered)
     verdict: Literal["HIGH", "ELEVATED", "NORMAL"]
     method_results: list[MethodResult]
+
+    #: Per-cluster scores from the clustered composite (None in legacy-only runs).
+    cluster_scores: dict[str, float] | None = None
+    #: The legacy plain-mean composite, kept for cross-version comparability.
+    composite_z_legacy: float | None = None
 
     @property
     def label(self) -> str:

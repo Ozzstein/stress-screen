@@ -554,6 +554,13 @@
         {% for cell in mod.flagged_cells %}
         <div class="cell-card">
           <h4>Flagged Cell: {{ cell.label }} — z={{ "%.2f"|format(cell.composite_z) }}</h4>
+          {% if cell.cluster_scores %}
+          <div class="methods-list">
+            {% for cname, cscore in cell.cluster_scores.items() %}
+              <span class="method-tag {% if cscore < 2.0 %}elevated{% endif %}">cluster {{ cname }}: {{ "%.2f"|format(cscore) }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
           <div class="methods-list">
             {% for mr in cell.method_results %}
               {% if mr.verdict == "HIGH" %}

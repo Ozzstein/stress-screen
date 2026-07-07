@@ -77,6 +77,17 @@ presets:
 #   s3_min_mad: 1.0e-3
 #   s3_warm_gate_cap: 1.5       # cap on warm-T S3 amplification
 #
+# composite:
+#   mode: clustered             # clustered (default) | legacy (plain mean)
+#   reduce: mean                # within-cluster reduction: mean | max
+#   # Cluster membership is fixed in code (it follows from which methods
+#   # share inputs); these WEIGHTS are the calibratable knobs:
+#   weight_self_discharge: 1.0  # ocv_k + temp_k
+#   weight_residual_dynamics: 1.0  # thermal_corr + cusum
+#   weight_fleet_divergence: 1.0   # spread + rank
+#   weight_li_plating: 1.0
+#   weight_isc: 1.0
+#
 # aggregate:
 #   z_thresh: 2.0               # per-method HIGH threshold in the composite
 #   winsor_z: 8.0               # per-method z clipped to ± this before averaging
