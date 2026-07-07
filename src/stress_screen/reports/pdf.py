@@ -42,6 +42,14 @@ from stress_screen.reports.figures import FigureSet, build_figures
 
 def _fig_to_image(fig, width_pt: float, height_pt: float) -> Image:
     """Render a Plotly figure to a ReportLab Image at the given pt dimensions."""
+    # Disable Kaleido's MathJax stage: we render no LaTeX, it slows every
+    # figure down, and it is a known cause of intermittent renderer hangs on
+    # Windows CI runners.
+    try:
+        import plotly.io as pio
+        pio.kaleido.scope.mathjax = None
+    except Exception:
+        pass
     # Scale factor: 72 pt/inch, kaleido works in pixels; use 1.5× for crispness
     px_w = int(width_pt * 1.5)
     px_h = int(height_pt * 1.5)

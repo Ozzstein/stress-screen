@@ -19,7 +19,7 @@ dependencies = [
 stress_screen = "stress_screen.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3"]
 
 [build-system]
 requires = ["hatchling"]
@@ -37,3 +37,8 @@ packages = ["src/stress_screen"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# pytest-timeout: no single test may run longer than 10 min (Kaleido on
+# Windows CI runners can hang; fail fast with a stack trace instead).
+# "thread" method works on Windows where signals don't.
+timeout = 600
+timeout_method = "thread"
