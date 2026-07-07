@@ -134,7 +134,7 @@ def _print_verdicts(module_verdicts, verbose: bool = False, quiet: bool = False)
 #: Registered subcommands. Anything else as the first argument (a CSV path,
 #: a flag, nothing at all) is treated as an implicit "run" — so the historical
 #: `stress_screen file.csv --chem nmc` invocation works forever.
-_SUBCOMMANDS = {"run", "calibrate"}
+_SUBCOMMANDS = {"run", "calibrate", "trend", "history", "batch"}
 
 
 def main() -> None:
@@ -172,10 +172,60 @@ def main() -> None:
     cal_p.add_argument("--sweep", action="store_true",
                        help="Sweep composite_z thresholds and suggest an operating point")
 
+    trend_p = sub.add_parser(
+        "trend",
+        help="Track a pack across tests over time (raw k trajectories)",
+        description=(
+            "Compare a pack's runs in a history store over time. Trends are "
+            "computed on raw physical metrics (self-discharge k) — z-scores "
+            "are fleet-relative within one run and would hide uniform "
+            "degradation. Exit code 1 when any cell is flagged as worsening."
+        ),
+    )
+    trend_p.add_argument("--history", type=Path, required=True,
+                         help="History store directory")
+    trend_p.add_argument("--pack", required=True, help="Pack id to trend")
+    trend_p.add_argument("--module", type=int, default=None, help="Module number")
+    trend_p.add_argument("--group", type=int, default=None,
+                         help="Cell-group number (requires --module)")
+    trend_p.add_argument("--k-slope-floor", type=float, default=1e-6,
+                         help="Theil-Sen k-slope (1/h per run) above which a "
+                              "cell counts as worsening. Default: 1e-6")
+
+    hist_p = sub.add_parser(
+        "history",
+        help="List runs in a history store",
+    )
+    hist_p.add_argument("--history", type=Path, required=True,
+                        help="History store directory")
+    hist_p.add_argument("--pack", default=None, help="Filter by pack id")
+    hist_p.add_argument("--rebuild-index", action="store_true",
+                        help="Rebuild index.jsonl from the stored JSON files")
+
+    batch_p = sub.add_parser(
+        "batch",
+        help="Analyse every tester CSV in a directory (continue on error)",
+    )
+    batch_p.add_argument("directory", type=Path, help="Directory of *_M<n>.csv files")
+    batch_p.add_argument("--chem", choices=["lfp", "nmc", "nca"], default="lfp")
+    batch_p.add_argument("--config", type=Path, default=None)
+    batch_p.add_argument("--out-dir", type=Path, default=None)
+    batch_p.add_argument("--no-html", action="store_true")
+    batch_p.add_argument("--no-pdf", action="store_true")
+    batch_p.add_argument("--downsample", type=int, default=1)
+    batch_p.add_argument("--history", type=Path, default=None,
+                         help="Add each run's JSON result to this history store")
+
     args = parser.parse_args(argv)
 
     if args.command == "calibrate":
         _cmd_calibrate(args)
+    elif args.command == "trend":
+        _cmd_trend(args)
+    elif args.command == "history":
+        _cmd_history(args)
+    elif args.command == "batch":
+        _cmd_batch(args)
     else:
         _cmd_run(args)
 
@@ -276,6 +326,19 @@ def _add_run_arguments(p: argparse.ArgumentParser) -> None:
              "result summary, and report-path lines). By default only the "
              "per-module verdict lines are printed.",
     )
+    p.add_argument(
+        "--history",
+        type=Path,
+        default=None,
+        help="Add this run's JSON result to the given history store directory "
+             "(implies JSON generation)",
+    )
+    p.add_argument(
+        "--pack-id",
+        default=None,
+        help="Override the pack identifier recorded in the JSON result "
+             "(default: derived from the filename)",
+    )
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
@@ -287,7 +350,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
     set_quiet(args.quiet)
 
     try:
-        _run(args)
+        sys.exit(_run(args))
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(2)
@@ -304,8 +367,130 @@ def _cmd_run(args: argparse.Namespace) -> None:
         sys.exit(2)
 
 
-def _run(args: argparse.Namespace) -> None:
-    """Execute the full pipeline; separated from main() for clean error wrapping."""
+def _cmd_trend(args: argparse.Namespace) -> None:
+    from stress_screen.history import HistoryStore, analyze_cell_trend
+
+    store = HistoryStore(args.history)
+    entries = store.entries(args.pack)
+    if not entries:
+        known = ", ".join(store.packs()) or "(store is empty)"
+        print(f"Error: no runs for pack '{args.pack}' in {args.history}. "
+              f"Known packs: {known}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"Pack {args.pack}: {len(entries)} run(s)")
+    for e in entries:
+        mods = "  ".join(f"M{m}:{v}" for m, v in sorted(e.modules.items()))
+        print(f"  {e.test_date or 'unknown':10s}  {e.overall:8s}  {mods}")
+
+    def _cell_labels() -> list[str]:
+        labels: set[str] = set()
+        for e in entries:
+            labels.update(e.cells.keys())
+        return sorted(labels, key=lambda s: (int(s.split('/')[0][1:]), int(s.split('/')[1][1:])))
+
+    if args.group is not None and args.module is None:
+        print("Error: --group requires --module", file=sys.stderr)
+        sys.exit(2)
+
+    if args.module is not None and args.group is not None:
+        labels = [f"M{args.module}/G{args.group}"]
+    elif args.module is not None:
+        labels = [lb for lb in _cell_labels() if lb.startswith(f"M{args.module}/")]
+    else:
+        labels = _cell_labels()
+
+    any_worsening = False
+    detail = args.module is not None and args.group is not None
+    print()
+    for label in labels:
+        module_id = int(label.split("/")[0][1:])
+        group = int(label.split("/")[1][1:])
+        series = store.cell_series(args.pack, module_id, group)
+        if not series:
+            continue
+        trend = analyze_cell_trend(series, k_slope_floor=args.k_slope_floor)
+        if detail:
+            print(f"{label}: per-run history")
+            for s in series:
+                k = f"{s['k']:.3e}" if s.get("k") is not None else "—"
+                kc = f"{s['k_corrected']:.3e}" if s.get("k_corrected") is not None else "—"
+                cz = f"{s['composite_z']:.2f}" if s.get("composite_z") is not None else "—"
+                print(f"  {s['test_date'] or 'unknown':10s}  k={k}  k25={kc}  "
+                      f"composite_z={cz}  [{s.get('verdict', '?')}]")
+        if trend["worsening"]:
+            any_worsening = True
+            reasons = []
+            if trend["k_worsening"]:
+                reasons.append(f"k slope {trend['k_slope_per_run']:.2e}/run")
+            if trend["entered_flagged"]:
+                reasons.append(f"entered {series[-1].get('verdict')}")
+            print(f"  WORSENING {label}: {', '.join(reasons)} "
+                  f"(over {trend['n_runs']} runs)")
+
+    if not any_worsening:
+        print("No worsening cells flagged.")
+    sys.exit(1 if any_worsening else 0)
+
+
+def _cmd_history(args: argparse.Namespace) -> None:
+    from stress_screen.history import HistoryStore
+
+    store = HistoryStore(args.history)
+    if args.rebuild_index:
+        n = store.rebuild_index()
+        print(f"Index rebuilt: {n} run(s)")
+    entries = store.entries(args.pack)
+    if not entries:
+        print("No runs in store." if args.pack is None
+              else f"No runs for pack '{args.pack}'.")
+        sys.exit(0)
+    for e in entries:
+        mods = "  ".join(f"M{m}:{v}" for m, v in sorted(e.modules.items()))
+        print(f"{e.pack_id:24s} {e.test_date or 'unknown':10s} {e.overall:8s} {mods}")
+    sys.exit(0)
+
+
+def _cmd_batch(args: argparse.Namespace) -> None:
+    from stress_screen._progress import set_quiet
+    set_quiet(True)
+
+    csvs = sorted(p for p in args.directory.glob("*_M*.csv"))
+    if not csvs:
+        print(f"Error: no *_M<n>.csv files found in {args.directory}", file=sys.stderr)
+        sys.exit(2)
+
+    worst = 0
+    summary: list[tuple[str, str]] = []
+    for csv in csvs:
+        run_args = argparse.Namespace(
+            csv=csv, chem=args.chem, config=args.config, c_rate=None,
+            capacity_ah=None, mapping=None, out_dir=args.out_dir,
+            no_html=args.no_html, no_pdf=args.no_pdf, no_json=False,
+            json_out=None, downsample=args.downsample, verbose=False,
+            full=False, quiet=True, history=args.history, pack_id=None,
+        )
+        try:
+            code = _run(run_args)
+            status = {0: "OK", 1: "NOK"}.get(code, f"exit {code}")
+        except (ValueError, FileNotFoundError) as exc:
+            code, status = 2, f"ERROR: {exc}"
+        except Exception as exc:  # continue-on-error is the point of batch
+            code, status = 2, f"ERROR ({type(exc).__name__}): {exc}"
+        worst = max(worst, code)
+        summary.append((csv.name, status))
+
+    print()
+    print(f"Batch: {len(csvs)} file(s)")
+    for name, status in summary:
+        print(f"  {name}: {status}")
+    sys.exit(worst)
+
+
+def _run(args: argparse.Namespace) -> int:
+    """Execute the full pipeline and return the exit code (0 ok / 1 any NOK);
+    separated from the command wrappers for clean error handling and reuse
+    by the batch command."""
     from stress_screen._progress import get as get_progress
     from stress_screen.config import load_config
     from stress_screen.loader import load_csv, active_channel_count, remap_temperatures
@@ -532,22 +717,31 @@ def _run(args: argparse.Namespace) -> None:
         if not args.quiet:
             print(f"PDF report:  {pdf_path}")
 
-    if not args.no_json:
+    history_dir = getattr(args, "history", None)
+    if not args.no_json or history_dir is not None:
         from stress_screen.serialize import write_json_result
         json_path = args.json_out or (out_dir / f"{stem}_result.json")
         prog.stage(f"Writing JSON result -> {json_path}")
+        run_info: dict = {"downsample": args.downsample}
+        if getattr(args, "pack_id", None):
+            run_info["pack_id"] = args.pack_id
         write_json_result(
             result,
             json_path,
             config=config.to_dict(),
-            run_info={"downsample": args.downsample},
+            run_info=run_info,
         )
         if not args.quiet:
             print(f"JSON result: {json_path}")
+
+        if history_dir is not None:
+            from stress_screen.history import HistoryStore
+            summary = HistoryStore(history_dir).add(json_path)
+            prog.stage(f"Added to history store ({summary.pack_id})")
 
     prog.stage("Done.")
 
     # ------------------------------------------------------------------
     # 10. Exit code
     # ------------------------------------------------------------------
-    sys.exit(1 if result.any_nok else 0)
+    return 1 if result.any_nok else 0
