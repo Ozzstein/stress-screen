@@ -3,13 +3,19 @@
 #   macOS:   pyinstaller stress_screen.spec  →  dist/stress_screen
 #   Windows: pyinstaller stress_screen.spec  →  dist/stress_screen.exe
 #
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 import sys, os
 
 datas = [
     ('src/stress_screen/configs/temp_mapping.yaml', 'configs'),
     ('src/stress_screen/configs/analysis_defaults.yaml', 'configs'),
 ]
+
+# plotly resolves the kaleido version via importlib.metadata at PDF-render
+# time; without the dist-info metadata the frozen binary dies with
+# PackageNotFoundError. Ship both packages' metadata.
+datas += copy_metadata('kaleido')
+datas += copy_metadata('plotly')
 
 # Kaleido static-image engine (kaleido 0.2.x): bundle its Chromium-based
 # executable directory, otherwise PDF export dies in the frozen binary.
