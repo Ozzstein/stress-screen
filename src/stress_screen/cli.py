@@ -486,7 +486,9 @@ def _run(args: argparse.Namespace) -> int:
     by the batch command."""
     from stress_screen._progress import get as get_progress
     from stress_screen.config import load_config
-    from stress_screen.loader import load_csv, active_channel_count, remap_temperatures
+    from stress_screen.loader import (
+        load_csv, active_channel_count, remap_temperatures, modules_without_temperature,
+    )
     from stress_screen.topology import derive_topology
     from stress_screen.segmentation import segment, rest_segments, charge_segments
     from stress_screen.analysis.rest import run_rest_analysis
@@ -545,6 +547,20 @@ def _run(args: argparse.Namespace) -> int:
     # of the sensors that bracket it (per temp_mapping.yaml), replacing the
     # raw 1:1 Cell_N_Temp assignment from the loader.
     cell_df = remap_temperatures(cell_df, topology)
+
+    # A module with no temperature at all would silently drop out of the
+    # thermal methods and distort every other module's fleet statistics
+    # (the z-scores are pack-wide) — refuse to produce a verdict instead.
+    dead_modules = modules_without_temperature(cell_df, topology)
+    if dead_modules:
+        mods = ", ".join(f"M{m}" for m in dead_modules)
+        verb = "has" if len(dead_modules) == 1 else "have"
+        raise ValueError(
+            f"Test invalidated: {mods} {verb} no temperature data (every sensor "
+            "reads 0). Check the sensor harness and the CSV temperature-column "
+            "layout; the thermal methods (thermal_corr, temp_k, ISC S2) and the "
+            "temperature compensation of spread/rank cannot run without it."
+        )
 
     # ------------------------------------------------------------------
     # 3. Segment

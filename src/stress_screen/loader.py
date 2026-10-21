@@ -331,6 +331,30 @@ def remap_temperatures(
     return result_df
 
 
+def modules_without_temperature(
+    cell_df: pd.DataFrame,
+    topology: "PackTopology",
+) -> list[int]:
+    """Return the 1-based ids of modules that have no temperature data at all.
+
+    A module qualifies when every one of its channels is NaN for every
+    sample — the signature of a dead sensor harness, or of a CSV whose
+    temperature columns sit elsewhere than the loader expects. Single dead
+    groups are not reported: ``remap_temperatures`` already covers those
+    with the nearest valid sensor in the module.
+
+    Call on the output of ``remap_temperatures``.
+    """
+    has_temp = cell_df.groupby("channel_index")["temperature"].apply(
+        lambda s: bool(s.notna().any())
+    )
+    module_has_temp: dict[int, bool] = {}
+    for ch, ok in has_temp.items():
+        module_id = topology.module_for_channel(int(ch))
+        module_has_temp[module_id] = module_has_temp.get(module_id, False) or ok
+    return sorted(m for m, ok in module_has_temp.items() if not ok)
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

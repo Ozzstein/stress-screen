@@ -70,6 +70,16 @@ def test_e2e_cli_short_rest_rejected(tmp_path):
     assert "Test invalidated" in result.stderr
 
 
+def test_e2e_cli_module_without_temperature_rejected(tmp_path):
+    """A module whose sensors all read 0 must exit 2 rather than be screened
+    with half the fleet silently missing from the thermal methods."""
+    csv = make_synthetic_csv(tmp_path, dead_temp_modules={2})
+    result = _run_cli(csv, "--no-html", "--no-pdf", "--no-json")
+    assert result.returncode == 2, f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    assert "Test invalidated" in result.stderr
+    assert "M2" in result.stderr and "no temperature data" in result.stderr
+
+
 @pytest.mark.skipif(
     os.environ.get("STRESS_SCREEN_E2E_REAL_CSV") != "1",
     reason="real-CSV e2e is opt-in (STRESS_SCREEN_E2E_REAL_CSV=1)",

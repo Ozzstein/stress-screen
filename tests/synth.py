@@ -37,6 +37,7 @@ def make_synthetic_csv(
     baseline_leak_mv_per_h: tuple[float, float] = (0.02, 0.08),
     seed: int = 42,
     filename: str | None = None,
+    dead_temp_modules: set[int] | None = None,
 ) -> Path:
     """Write a synthetic tester CSV and return its path.
 
@@ -65,6 +66,9 @@ def make_synthetic_csv(
         RNG seed; the file is fully deterministic for a given argument set.
     filename:
         Override the generated ``SynthPack_D01032026_HHMMSS_M<n>.csv`` name.
+    dead_temp_modules:
+        1-based module ids whose temperature sensors all read 0 (a dead
+        harness); only meaningful for the paired layouts (series 8 or 16).
     """
     rng = np.random.default_rng(seed)
     leaky_channels = leaky_channels or {}
@@ -150,6 +154,13 @@ def make_synthetic_csv(
         for pair in range(n_pairs):
             for col in _PAIR_GAP_COLS[series]:
                 gap_cols.add(pair * 2 * series + col)  # 1-based temp column number
+        # A dead module reads 0 on every sensor of its block (7 or 8 columns
+        # packed after its pair-mate's, see the layout note above).
+        n_sensors = (2 * series - len(_PAIR_GAP_COLS[series])) // 2
+        for m in dead_temp_modules or ():
+            pair, pos_in_pair = divmod(m - 1, 2)
+            for k in range(1, n_sensors + 1):
+                gap_cols.add(pair * 2 * series + pos_in_pair * n_sensors + k)
 
     for i in range(n_rows):
         cells = []

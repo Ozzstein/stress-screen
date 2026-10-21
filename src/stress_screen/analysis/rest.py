@@ -285,7 +285,10 @@ def run_rest_analysis(
     # Subtracts the expected OCV offset due to each cell's temperature
     # deviation from the fleet median at each time step.
     # V_adj = V - (dV/dT) * (T_cell - T_fleet_median)
-    # NaN temperatures → zero correction for that cell/timestep.
+    # A sample without temperature gets a NaN V_adj and is thereby excluded
+    # from the fleet median and from this cell's M3/M6 fit. Whole modules
+    # without temperature are rejected upstream (cli), so this only covers
+    # sporadic sensor gaps.
     has_temp_col = "temperature" in settled_df.columns
     if has_temp_col and params.dv_dt_coeff_mv_per_c != 0.0:
         pivot_t: pd.DataFrame = settled_df.pivot_table(

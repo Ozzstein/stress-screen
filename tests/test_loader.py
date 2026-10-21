@@ -195,6 +195,38 @@ def test_remap_temperatures_2p16s_reads_paired_sensor_columns():
             assert (got == sensor1_col + k - 1).all(), f"M{m}/G{g}: {got.unique()}"
 
 
+def _remapped_frame(n_modules: int, series: int, temp_for_channel) -> pd.DataFrame:
+    """Long-format frame as it looks after remap_temperatures: one temperature
+    per channel per sample, given by ``temp_for_channel(channel_index)``."""
+    rows = [
+        (t / 60.0, ch, 3.3, temp_for_channel(ch))
+        for t in range(3)
+        for ch in range(n_modules * series)
+    ]
+    return pd.DataFrame(
+        rows, columns=["time_hours", "channel_index", "voltage", "temperature"]
+    )
+
+
+def test_modules_without_temperature_reports_all_nan_module():
+    from stress_screen.loader import modules_without_temperature
+    from stress_screen.topology import derive_topology
+
+    # 2 × 2P16S modules; every channel of M2 has no temperature at all
+    df = _remapped_frame(2, 16, lambda ch: np.nan if ch >= 16 else 25.0)
+    assert modules_without_temperature(df, derive_topology(32, 2)) == [2]
+
+
+def test_modules_without_temperature_ignores_single_dead_group():
+    from stress_screen.loader import modules_without_temperature
+    from stress_screen.topology import derive_topology
+
+    # One dead group is a sensor fault handled by the nearest-sensor fallback,
+    # not a module without temperature data.
+    df = _remapped_frame(2, 16, lambda ch: np.nan if ch == 20 else 25.0)
+    assert modules_without_temperature(df, derive_topology(32, 2)) == []
+
+
 def test_synthetic_2p16s_fixture_every_module_has_temperatures(tmp_path):
     """A 4-module 2P16S fixture laid out like the tester must give every
     module real temperatures after remapping — no module may fall through to
