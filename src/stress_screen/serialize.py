@@ -67,11 +67,12 @@ SCHEMA_VERSION = 3
 #     "composite_z" is the official (mode-selected) composite.
 # v1: initial schema.
 
-#: Filename date components: newer tester firmware writes ``_D<DDMMYYYY>_``
-#: (optionally followed by ``_HHMMSS``); older files use ``_P<DDMMYYYY>_``.
+#: Filename date components: newer tester firmware writes ``_D<date>_``
+#: (optionally followed by ``_HHMMSS``); older files use ``_P<date>_``. The
+#: eight date digits are DDMMYYYY on some testers and YYYYMMDD on others.
 _DATE_PATTERNS = (
-    re.compile(r"_D(\d{2})(\d{2})(\d{4})[_.]"),
-    re.compile(r"_P(\d{2})(\d{2})(\d{4})[_.]"),
+    re.compile(r"_D(\d{8})[_.]"),
+    re.compile(r"_P(\d{8})[_.]"),
 )
 
 
@@ -85,21 +86,37 @@ def tool_version() -> str:
         return "unknown"
 
 
+def _parse_date_digits(digits: str) -> date | None:
+    """Read eight date digits as DDMMYYYY, falling back to YYYYMMDD.
+
+    For years 2000-2099 the two readings are never both valid: a year-first
+    string starts with ``20``, which read day-first puts the month at 20+.
+    """
+    for day, month, year in (
+        (digits[0:2], digits[2:4], digits[4:8]),
+        (digits[6:8], digits[4:6], digits[0:4]),
+    ):
+        try:
+            return date(int(year), int(month), int(day))
+        except ValueError:
+            continue
+    return None
+
+
 def extract_test_date(filename: str) -> date | None:
     """Extract the test date from a tester CSV filename.
 
-    Tries the ``_D<DDMMYYYY>_`` pattern first (current firmware), then the
-    legacy ``_P<DDMMYYYY>_`` pattern. Returns None when neither matches or the
-    digits do not form a real calendar date.
+    Tries the ``_D<date>_`` pattern first (current firmware), then the legacy
+    ``_P<date>_`` pattern; the date digits may be DDMMYYYY or YYYYMMDD.
+    Returns None when neither matches or the digits form no real calendar
+    date either way.
     """
     for pattern in _DATE_PATTERNS:
         m = pattern.search(filename)
         if m:
-            day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            try:
-                return date(year, month, day)
-            except ValueError:
-                continue
+            parsed = _parse_date_digits(m.group(1))
+            if parsed is not None:
+                return parsed
     return None
 
 

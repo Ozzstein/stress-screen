@@ -22,9 +22,17 @@ def test_extract_test_date_legacy_p_pattern():
     ) == date(2026, 5, 18)
 
 
+def test_extract_test_date_year_first_pattern():
+    # Some testers write the date year-first (YYYYMMDD) rather than DDMMYYYY.
+    assert extract_test_date(
+        "DataLogging_C2_I04_D20261002_120054_M4.csv"
+    ) == date(2026, 10, 2)
+    assert extract_test_date("Pack_P20260518_M6.csv") == date(2026, 5, 18)
+
+
 def test_extract_test_date_missing_or_invalid():
     assert extract_test_date("NoDateHere_M6.csv") is None
-    # digits that do not form a real calendar date
+    # digits that form a real calendar date in neither DDMMYYYY nor YYYYMMDD
     assert extract_test_date("Pack_D99992026_M6.csv") is None
 
 
