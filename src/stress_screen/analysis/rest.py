@@ -84,13 +84,18 @@ class RestParams:
     """
 
     m3_min_slope_mad_v_per_h: float = 5e-6
-    """Minimum MAD scale (V/h) for M3 divergence-slope z-scores.
+    """Lower bound of the MAD scale (V/h) for M3 divergence-slope z-scores.
 
     When the fleet is healthy, empirical MAD ≈ 0 and dividing by it inflates
-    any nonzero slope into a millions-scale z-score. This floor sets the
-    effective noise threshold: 5 µV/h corresponds to ~0.27 mV of total OCV
-    divergence over a 54 h rest — roughly the measurement noise floor for LFP.
-    Only slopes meaningfully above this level will escalate toward HIGH.
+    any nonzero slope into a millions-scale z-score. The effective floor is
+    max(this, q / T_settled), where q is the tester's voltage resolution
+    detected from the rest data (1 mV on integer-millivolt loggers) and
+    T_settled the settled rest length: a single quantisation step across the
+    window then scores z ≈ 1 at most, and HIGH needs ≥ ~3 steps of genuine
+    divergence. On loggers with fine (sub-µV) resolution this value governs;
+    5 µV/h is ~0.27 mV of total divergence over a 54 h rest. The effective
+    floor and q are reported in the method metadata (``mad_floor_v_per_h``,
+    ``voltage_resolution_v``).
     """
 
     dv_dt_coeff_mv_per_c: float = -0.2
@@ -137,6 +142,17 @@ def _nan_result(method_name: str, metadata: dict[str, Any]) -> MethodResult:
         verdict="NORMAL",
         metadata=metadata,
     )
+
+
+def _voltage_resolution(values: np.ndarray) -> float:
+    """Smallest step between distinct voltage values (V) — the tester's
+    quantisation step (1 mV on integer-millivolt loggers). NaN when there are
+    fewer than two distinct values."""
+    arr = np.asarray(values, dtype=float)
+    distinct = np.unique(np.round(arr[np.isfinite(arr)], 7))
+    steps = np.diff(distinct)
+    steps = steps[steps > 0]
+    return round(float(steps.min()), 9) if steps.size else float("nan")
 
 
 # ---------------------------------------------------------------------------
@@ -355,10 +371,21 @@ def run_rest_analysis(
     # M3 — Slope of |V_cell − V_fleet_median| (divergence rate)            #
     # ------------------------------------------------------------------ #
     m3_spread: dict[int, float] = {}
+    # Noise floor for the slope z-scores: at least one quantisation step of
+    # the tester's voltage resolution across the settled window, so a single
+    # rounding step cannot reach HIGH (see RestParams.m3_min_slope_mad_v_per_h).
+    m3_resolution_v = float("nan")
+    m3_floor = params.m3_min_slope_mad_v_per_h
 
     if not pivot_v_adj.empty:
         fleet_med_adj = pivot_v_adj.median(axis=1)
         t_index = pivot_v_adj.index.values  # _t_rel in hours
+        # Measure on the raw samples: the pivot averages duplicated
+        # timestamps, which would halve the apparent resolution.
+        m3_resolution_v = _voltage_resolution(settled_df["voltage"].to_numpy())
+        t_span = float(t_index[-1] - t_index[0]) if len(t_index) > 1 else 0.0
+        if np.isfinite(m3_resolution_v) and t_span > 0:
+            m3_floor = max(m3_floor, m3_resolution_v / t_span)
         for ch in channels:
             if ch in pivot_v_adj.columns and chan_data[ch]["n_set"] >= params.min_points:
                 deviation_abs = np.abs((pivot_v_adj[ch] - fleet_med_adj).values)
@@ -377,7 +404,7 @@ def run_rest_analysis(
             m3_spread[ch] = np.nan
 
     spread_arr = np.array([m3_spread[ch] for ch in channels])
-    spread_z_arr = robust_z(spread_arr, min_mad=params.m3_min_slope_mad_v_per_h)
+    spread_z_arr = robust_z(spread_arr, min_mad=m3_floor)
     m3_z: dict[int, float] = {ch: float(spread_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
@@ -549,15 +576,19 @@ def run_rest_analysis(
             )
 
         # M3
+        m3_meta = {
+            "voltage_resolution_v": m3_resolution_v,
+            "mad_floor_v_per_h": m3_floor,
+        }
         if insufficient or np.isnan(m3_spread.get(ch, np.nan)):
-            m3_res = _nan_result("spread", {"divergence_slope_v_per_h": np.nan})
+            m3_res = _nan_result("spread", {"divergence_slope_v_per_h": np.nan, **m3_meta})
         else:
             z3 = m3_z[ch]
             m3_res = MethodResult(
                 method_name="spread",
                 z_score=z3,
                 verdict=_verdict(z3, params.z_thresh),
-                metadata={"divergence_slope_v_per_h": m3_spread[ch]},
+                metadata={"divergence_slope_v_per_h": m3_spread[ch], **m3_meta},
             )
 
         # M4

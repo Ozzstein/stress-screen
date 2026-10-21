@@ -50,7 +50,8 @@ presets:
 #   arrhenius_ea_ev: 0.5        # Ea for self-discharge T-correction (eV)
 #   m6_slope_weight: 0.5        # rank-slope penalty weight (M6)
 #   m6_max_slope_contribution: 1.0
-#   m3_min_slope_mad_v_per_h: 5.0e-6  # MAD floor for M3 divergence slopes
+#   m3_min_slope_mad_v_per_h: 5.0e-6  # lower bound of the M3 slope MAD floor
+#                                     # (effective floor >= 1 LSB over the settled rest)
 #   dv_dt_coeff_mv_per_c: -0.2  # OCV temperature coefficient (mV/°C)
 #   edge_sensor_deflation: 1.4142135623730951  # √2 penalty for edge cells
 #
