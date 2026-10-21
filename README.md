@@ -287,15 +287,23 @@ OCV analysis.
 
 The process exits with code `2`. Re-run the test with a longer rest cycle.
 
-## Temperature sensor layout (4P8S)
+## Temperature sensor layout
 
-Each 4P8S module has 7 physical sensors placed *between* the 8 series cell-groups, plus a structural 2-column gap between every pair of modules in the CSV. Sensor `k` of module `m` is read from CSV column:
+The tester packs temperature sensors by **module pair** (M1+M2, M3+M4, …): each pair's `Cell_N_Temp` block starts at the same column as the pair's voltage block, the two modules' sensors sit back to back at the start of it, and the remaining columns of the block carry no sensor (they read `0`). Sensor `k` of module `m` is read from CSV column:
 
 ```
-Cell_C_Temp  where  C = ((m-1)//2)*16 + ((m-1)%2)*7 + k
+4P8S  (7 sensors/module):  Cell_C_Temp  where  C = ((m-1)//2)*16 + ((m-1)%2)*7 + k   (gap: cols 15–16 of each block)
+2P16S (8 sensors/module):  Cell_C_Temp  where  C = ((m-1)//2)*32 + ((m-1)%2)*8 + k   (gap: cols 17–32 of each block)
+1P32S                   :  sequential, C = (m-1)*32 + k
 ```
 
-Each group's temperature is the average of the two bracketing sensors (or the single neighbour for G1 and G8):
+### 2P16S
+
+Sensor `T_k` sits at voltage tap `V(2k−1)`, between groups `2k−1` and `2k`, so both of those groups take `T_k` directly (G1, G2 → T1; G3, G4 → T2; … G15, G16 → T8).
+
+### 4P8S
+
+Each 4P8S module has 7 physical sensors placed *between* the 8 series cell-groups. Each group's temperature is the average of the two bracketing sensors (or the single neighbour for G1 and G8):
 
 | Group | Sensors used | Formula |
 |---|---|---|

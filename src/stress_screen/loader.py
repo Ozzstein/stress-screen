@@ -201,25 +201,33 @@ def active_channel_count(cell_df: pd.DataFrame) -> int:
     return cell_df["channel_index"].nunique()
 
 
+#: Sensors wired per module in the paired CSV layouts (see _sensor_csv_channel).
+_PAIRED_SENSORS_PER_MODULE = {"4P8S": 7, "2P16S": 8}
+
+
 def _sensor_csv_channel(module_id: int, sensor_idx: int, config_name: str, series: int) -> int:
     """Return the 0-based channel_index of the CSV column carrying sensor *k*
     of *module_id*.
 
-    For 4P8S the CSV layout is **paired**: modules come in pairs (M1+M2),
-    (M3+M4), (M5+M6); each pair occupies 14 consecutive ``Cell_N_Temp``
-    columns followed by a 2-column structural gap (no sensor wired).
+    For 4P8S and 2P16S the CSV layout is **paired**: modules come in pairs
+    (M1+M2), (M3+M4), (M5+M6). Each pair's temperature block starts at the
+    same column as the pair's voltage block (``2*series`` columns wide), and
+    the two modules' sensors are packed back to back at the start of it; the
+    rest of the block is a structural gap (no sensor wired, reads 0).
 
-        sensor k of module m  →  CSV column = ((m-1)//2)*16 + ((m-1)%2)*7 + k
+        4P8S : sensor k of module m  →  column ((m-1)//2)*16 + ((m-1)%2)*7 + k
+               (7 + 7 sensors, gap at columns 15-16 of each block)
+        2P16S: sensor k of module m  →  column ((m-1)//2)*32 + ((m-1)%2)*8 + k
+               (8 + 8 sensors, gap at columns 17-32 of each block)
 
-    For 1P32S and 2P16S the layout is sequential: ``(m-1)*series + k`` cells
-    per module with no gaps.
+    For 1P32S the layout is sequential: ``(m-1)*series + k`` with no gaps.
     """
-    if config_name == "4P8S":
-        pair = (module_id - 1) // 2
-        pos_in_pair = (module_id - 1) % 2
-        csv_col = pair * 16 + pos_in_pair * 7 + sensor_idx  # 1-based
+    n_sensors = _PAIRED_SENSORS_PER_MODULE.get(config_name)
+    if n_sensors is not None:
+        pair, pos_in_pair = divmod(module_id - 1, 2)
+        csv_col = pair * 2 * series + pos_in_pair * n_sensors + sensor_idx  # 1-based
         return csv_col - 1
-    # 1P32S, 2P16S: sequential layout
+    # 1P32S: sequential layout
     return (module_id - 1) * series + sensor_idx - 1
 
 

@@ -18,9 +18,12 @@ from pathlib import Path
 
 import numpy as np
 
-#: 4P8S structural constants (see loader._sensor_csv_channel): each module
-#: pair occupies 14 temp columns + a 2-column gap with no sensor wired.
-_PAIR_GAP_COLS = (15, 16)
+#: Paired temp-column layouts (see loader._sensor_csv_channel). Each module
+#: pair's sensors are packed at the start of the pair's voltage-column block;
+#: the remaining columns of the block carry no sensor and read 0.
+#:   4P8S : 7 + 7 sensors in a 16-column block, gap at columns 15-16
+#:   2P16S: 8 + 8 sensors in a 32-column block, gap at columns 17-32
+_PAIR_GAP_COLS = {8: (15, 16), 16: tuple(range(17, 33))}
 
 
 def make_synthetic_csv(
@@ -126,9 +129,9 @@ def make_synthetic_csv(
     pack_voltage = volt_mv.mean(axis=1) * series / 1000.0
 
     # --- Write the file ------------------------------------------------------
-    # Temp columns follow the paired 4P8S sensor layout: sensors live in the
-    # first 14 columns of each module pair; the structural gap columns read 0
-    # (dead sensor -> NaN in the loader).
+    # Temp columns follow the tester's paired sensor layout: sensors live in
+    # the first columns of each module pair's block; the structural gap
+    # columns read 0 (dead sensor -> NaN in the loader).
     header_cells = ";".join(
         f"Cell_{n}_Volt;Cell_{n}_Temp" for n in range(1, n_channels + 1)
     )
@@ -142,11 +145,11 @@ def make_synthetic_csv(
         return f"{x:.{nd}f}".replace(".", ",")
 
     gap_cols = set()
-    if series == 8:  # 4P8S paired layout
+    if series in _PAIR_GAP_COLS:  # 4P8S / 2P16S paired layouts
         n_pairs = (n_modules + 1) // 2
         for pair in range(n_pairs):
-            for col in _PAIR_GAP_COLS:
-                gap_cols.add(pair * 16 + col)  # 1-based temp column number
+            for col in _PAIR_GAP_COLS[series]:
+                gap_cols.add(pair * 2 * series + col)  # 1-based temp column number
 
     for i in range(n_rows):
         cells = []

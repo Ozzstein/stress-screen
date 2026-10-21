@@ -137,3 +137,80 @@ def test_synthetic_fixture_roundtrip(tmp_path):
     # gap-column temperatures (dead sensors) must be NaN
     ch14 = cell_df[cell_df["channel_index"] == 14]["temperature"]
     assert ch14.isna().all()
+
+
+# ---------------------------------------------------------------------------
+# Temperature sensor → CSV column layout
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("module_id, sensor_idx, expected_col", [
+    # 4P8S: 7 sensors/module, module pairs packed into 16-column blocks
+    (1, 1, 1), (1, 7, 7), (2, 1, 8), (2, 7, 14), (3, 1, 17), (4, 7, 30),
+])
+def test_sensor_csv_channel_4p8s_paired(module_id, sensor_idx, expected_col):
+    from stress_screen.loader import _sensor_csv_channel
+
+    assert _sensor_csv_channel(module_id, sensor_idx, "4P8S", 8) == expected_col - 1
+
+
+@pytest.mark.parametrize("module_id, sensor_idx, expected_col", [
+    # 2P16S: 8 sensors/module, module pairs packed into 32-column blocks
+    (1, 1, 1), (1, 8, 8), (2, 1, 9), (2, 8, 16),
+    (3, 1, 33), (3, 8, 40), (4, 1, 41), (4, 8, 48),
+])
+def test_sensor_csv_channel_2p16s_paired(module_id, sensor_idx, expected_col):
+    from stress_screen.loader import _sensor_csv_channel
+
+    assert _sensor_csv_channel(module_id, sensor_idx, "2P16S", 16) == expected_col - 1
+
+
+def test_remap_temperatures_2p16s_reads_paired_sensor_columns():
+    """Each 2P16S group must take its temperature from its own module's
+    8-column sensor block (M1 → cols 1-8, M2 → 9-16, M3 → 33-40, M4 → 41-48).
+
+    Every wired temp column carries its own 1-based column number, so a read
+    from the wrong column shows up as the wrong value, not just NaN.
+    """
+    from stress_screen.loader import remap_temperatures
+    from stress_screen.topology import derive_topology
+
+    n_ch = 64
+    wired = set(range(0, 16)) | set(range(32, 48))  # 0-based channel_index
+    rows = [
+        (t / 60.0, ch, 3.3, float(ch + 1) if ch in wired else np.nan)
+        for t in range(3)
+        for ch in range(n_ch)
+    ]
+    cell_df = pd.DataFrame(
+        rows, columns=["time_hours", "channel_index", "voltage", "temperature"]
+    )
+    out = remap_temperatures(cell_df, derive_topology(n_ch, 4))
+
+    for m in range(1, 5):
+        sensor1_col = ((m - 1) // 2) * 32 + ((m - 1) % 2) * 8 + 1
+        for g in range(1, 17):
+            ch = (m - 1) * 16 + g - 1
+            k = (g + 1) // 2  # sensor k covers groups 2k-1 and 2k
+            got = out.loc[out["channel_index"] == ch, "temperature"]
+            assert (got == sensor1_col + k - 1).all(), f"M{m}/G{g}: {got.unique()}"
+
+
+def test_synthetic_2p16s_fixture_every_module_has_temperatures(tmp_path):
+    """A 4-module 2P16S fixture laid out like the tester must give every
+    module real temperatures after remapping — no module may fall through to
+    all-NaN (the symptom of reading the unwired half of a pair block)."""
+    from stress_screen.loader import remap_temperatures
+    from stress_screen.topology import derive_topology
+    from tests.synth import make_synthetic_csv
+
+    p = make_synthetic_csv(
+        tmp_path, n_modules=4, series=16, charge_hours=0.5, rest_hours=1.0
+    )
+    _, cell_df = load_csv(p)
+    assert active_channel_count(cell_df) == 64
+    out = remap_temperatures(cell_df, derive_topology(64, 4))
+
+    for m in range(1, 5):
+        chs = range((m - 1) * 16, m * 16)
+        t = out.loc[out["channel_index"].isin(chs), "temperature"]
+        assert t.notna().all(), f"M{m} has NaN temperatures after remap"
