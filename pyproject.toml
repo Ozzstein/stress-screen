@@ -7,7 +7,11 @@ dependencies = [
     "numpy>=1.24",
     "scipy>=1.11",
     "pyyaml>=6.0",
-    "plotly>=5.18",
+    # Plotly 7 dropped Kaleido 0.2 support (image export then demands
+    # kaleido>=1, which no longer bundles a browser and would break the
+    # stand-alone frozen binaries). Stay on Plotly 6 until that migration
+    # is a deliberate decision. Keep this bound in step with the kaleido pin.
+    "plotly>=5.18,<7",
     # 0.2.1.post1 ships only an armv7l Linux wheel — unusable on macOS/Windows
     "kaleido>=0.2,<0.3,!=0.2.1.post1",
     "reportlab>=4.0",
