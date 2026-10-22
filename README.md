@@ -1,12 +1,12 @@
 # stress-screen
 
-Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs eight detection methods over the rest and conditioning-charge phases, aggregates them into five evidence clusters, and produces a binary per-module **OK / NOK** verdict plus HTML/PDF reports and a machine-readable JSON result.
+Battery pack stress-test module screener. Given a tester CSV from a multi-module battery pack (4P8S / 2P16S / 1P32S topologies), `stress-screen` runs seven detection methods over the rest and conditioning-charge phases, aggregates them into five evidence clusters, and produces a binary per-module **OK / NOK** verdict plus HTML/PDF reports and a machine-readable JSON result.
 
 The screener is designed to catch the early-stage degradation modes that matter in pack qualification — self-discharge drift, thermal-coupled voltage drift, lithium plating signatures, and internal short circuits — without flagging the structural noise that comes from sensor placement and module-to-module temperature gradients.
 
 ## What it detects
 
-Each cell-group is scored by eight methods. Method z-scores are robust (median / MAD) and aggregated cluster-wise into the **composite z** (see *Composite: evidence clusters* below).
+Each cell-group is scored by seven methods. Method z-scores are robust (median / MAD) and aggregated cluster-wise into the **composite z** (see *Composite: evidence clusters* below).
 
 | Method | What it measures | Detects |
 |---|---|---|
@@ -15,22 +15,30 @@ Each cell-group is scored by eight methods. Method z-scores are robust (median /
 | `spread` | Slope of `\|V_cell − V_fleet_median\|` over rest (T-compensated) | Cells diverging from the fleet over time |
 | `cusum` | Two-sided CUSUM alarms on OCV residuals | Step changes / persistent biases the linear fit would miss |
 | `temp_k` | Arrhenius-corrected `ocv_k` normalized to 25 °C | Excess self-discharge after removing temperature bias |
-| `rank` | Voltage-rank percentile drift within the module | Cells sliding down the within-module ranking |
+| `rank` | Voltage-rank percentile within the pack over rest — **context only, not scored** | Nothing on its own; shown so the voltage ordering and its stability can be inspected |
 | `li_plating` | dQ/dV peak shifts + post-charge relaxation fit | Lithium plating on the anode (cold/fast-charge induced) |
 | `isc` | S1 excess `k` + S2 thermal slope + S3 dV/dQ area deficit | Internal short-circuit signatures |
 
 ### Composite: evidence clusters
 
-The eight methods are not eight independent measurements — they share inputs
-by construction, forming five evidence clusters:
+The seven scored methods are not seven independent measurements — they share
+inputs by construction, forming five evidence clusters:
 
 | Cluster | Members | Physical signal |
 |---|---|---|
 | `self_discharge` | `ocv_k`, `temp_k` | Self-discharge rate (raw + T-corrected) |
 | `residual_dynamics` | `thermal_corr`, `cusum` | Structure in the OCV-fit residuals |
-| `fleet_divergence` | `spread`, `rank` | Drift away from the fleet |
+| `fleet_divergence` | `spread` | Drift away from the fleet |
 | `li_plating` | `li_plating` | Plating signatures |
 | `isc` | `isc` | Internal-short signatures |
+
+`rank` is deliberately kept out of the composite. Percentile rank has no
+resolution on 1 mV tester data: a healthy fleet sits within a few mV, so ranks
+are dominated by ties, and the fleet median moves through the bulk as the
+slowest-relaxing module settles, reshuffling healthy cells by tens of
+percentile points. Its bottom-20 % share reflects static SOC ordering, not
+drift. The rank chart and statistics stay in the report as context; the
+method's z-score is always `null`.
 
 Member z-scores average within their cluster (redundant noisy readings of one
 signal), each cluster score is winsorized to ±8, and the composite is the

@@ -15,23 +15,30 @@ from stress_screen.analysis.util import winsorize_clip
 from stress_screen.models import CellVerdict, MethodResult, ModuleVerdict, PackTopology
 
 
-#: Cluster membership of the detection methods. The six rest methods are NOT
+#: Cluster membership of the detection methods. The rest methods are NOT
 #: independent measurements — they share fitted inputs by construction:
 #:   - temp_k is ocv_k's k times an Arrhenius scalar          → self_discharge
 #:   - thermal_corr and cusum both analyse ocv_k's residuals  → residual_dynamics
-#:   - spread and rank both derive from the same T-compensated
-#:     fleet voltage pivot                                    → fleet_divergence
-#: Treating them as eight independent votes overweights self-discharge and
+#:   - spread is the T-compensated divergence slope from the
+#:     fleet median                                           → fleet_divergence
+#: Treating them as seven independent votes overweights self-discharge and
 #: dilutes the genuinely independent li_plating / isc signals. Membership is
 #: structural (it follows from the code), so it is fixed here; the per-cluster
 #: WEIGHTS are the calibratable knobs (config section `composite`).
 CLUSTERS: dict[str, tuple[str, ...]] = {
     "self_discharge": ("ocv_k", "temp_k"),
     "residual_dynamics": ("thermal_corr", "cusum"),
-    "fleet_divergence": ("spread", "rank"),
+    "fleet_divergence": ("spread",),
     "li_plating": ("li_plating",),
     "isc": ("isc",),
 }
+
+#: Methods whose results are informational only: they are reported (chart,
+#: per-cell table, JSON metadata) but never enter the composite, n_high or a
+#: cluster score, whatever their z-score. `rank` (percentile-rank trajectory)
+#: has no resolution on 1 mV tester data and its bottom-20 % share reflects
+#: static SOC ordering, not drift — see the M6 block in analysis/rest.py.
+ADVISORY_METHODS: frozenset[str] = frozenset({"rank"})
 
 _METHOD_TO_CLUSTER: dict[str, str] = {
     m: c for c, members in CLUSTERS.items() for m in members
@@ -102,7 +109,7 @@ def _composite_legacy(
     behavior, bit-identical). Returns (composite_z, n_methods_high)."""
     z_with_conf: list[tuple[float, float]] = []
     for mr in method_results:
-        if np.isnan(mr.z_score):
+        if mr.method_name in ADVISORY_METHODS or np.isnan(mr.z_score):
             continue
         conf = float(mr.metadata.get("confidence", 1.0))
         if conf <= 0.0:
@@ -141,7 +148,7 @@ def _composite_clustered(
     """
     by_cluster: dict[str, list[float]] = {}
     for mr in method_results:
-        if np.isnan(mr.z_score):
+        if mr.method_name in ADVISORY_METHODS or np.isnan(mr.z_score):
             continue
         # A method outside every known cluster forms its own singleton
         # cluster (weight 1.0) rather than being silently dropped.

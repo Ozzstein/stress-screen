@@ -1032,7 +1032,7 @@ def method_zscore_heatmap(
     z (verdict is encoded by color and shown in hover). Color clamps at ±6
     so scores beyond the ±2 gates remain distinguishable.
     """
-    from stress_screen.analysis.aggregate import CLUSTERS
+    from stress_screen.analysis.aggregate import ADVISORY_METHODS, CLUSTERS
 
     mv = next((m for m in result.module_verdicts if m.module_id == module_id), None)
     if mv is None or not mv.all_cells:
@@ -1065,7 +1065,7 @@ def method_zscore_heatmap(
             rows.append((f"  · {method.replace('_', ' ')}",
                          [_cell_z(cv, method) for cv in cells]))
             covered.add(method)
-    for method in sorted(present_methods - covered):
+    for method in sorted(present_methods - covered - ADVISORY_METHODS):
         rows.append((method.replace("_", " "),
                      [_cell_z(cv, method) for cv in cells]))
 

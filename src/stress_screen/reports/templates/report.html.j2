@@ -445,11 +445,12 @@
     <h2>Methodology</h2>
     <div class="methodology">
       <p>
-        Each cell-group is scored by <strong>eight detection methods</strong>
+        Each cell-group is scored by <strong>seven detection methods</strong>
         operating on the longest rest segment, the conditioning charge cycle, and pack-level
         temperature data. Each method produces a robust z-score (median/MAD-normalised against
         the fleet) which is aggregated <strong>cluster-wise into the composite z</strong>
-        (see verdict rules below). Method names below are detector IDs — <em>not</em> module names.
+        (see verdict rules below). The <code>rank</code> statistics are shown for context only
+        and are not scored. Method names below are detector IDs — <em>not</em> module names.
         Divergence and rank charts are smoothed with a ~30-min rolling median
         <em>for display only</em>; detection always runs on raw data.
       </p>
@@ -485,9 +486,9 @@
       </div>
 
       <div class="method-card">
-        <h4>rank <span style="color: var(--text-muted); font-weight: 400; font-size: 0.78rem;">— Voltage-rank percentile drift</span></h4>
-        <div class="descr">Tracks each cell's percentile rank within its module over the rest segment. Composite of bottom-20% fraction and rank-slope (temperature-compensated).</div>
-        <div class="detects"><strong>Detects:</strong> cells <em>sliding down</em> the module's voltage ranking over time — a non-parametric signature of declining cell health.</div>
+        <h4>rank <span style="color: var(--text-muted); font-weight: 400; font-size: 0.78rem;">— Voltage-rank percentile (context only, not scored)</span></h4>
+        <div class="descr">Percentile rank of each cell's temperature-compensated voltage within the pack over the rest segment. The chart shows the trajectory; the per-cell table gives the mean rank and the share of samples in the bottom 20 %.</div>
+        <div class="detects"><strong>Detects:</strong> nothing on its own. Percentile rank has no resolution on 1 mV tester data (ties; healthy cells reshuffle as the slowest-relaxing module settles) and the bottom-20 % share reflects static SOC ordering, not drift — so it never enters the composite.</div>
       </div>
 
       <div class="method-card">
@@ -504,10 +505,10 @@
 
       <div class="verdict-rules">
         <strong>Verdict aggregation (evidence clusters):</strong>
-        the eight methods are grouped into five evidence clusters —
+        the seven scored methods are grouped into five evidence clusters —
         <code>self_discharge</code> (ocv_k, temp_k),
         <code>residual_dynamics</code> (thermal_corr, cusum),
-        <code>fleet_divergence</code> (spread, rank),
+        <code>fleet_divergence</code> (spread),
         <code>li_plating</code>, and <code>isc</code> —
         because cluster members are redundant readings of the same physical
         signal, not independent measurements. Member z-scores are averaged
@@ -628,7 +629,7 @@
           {{ mod.divergence_chart | safe }}
         </div>
         <div class="chart-box">
-          <h4>Voltage Rank Percentile Over Rest — rank method</h4>
+          <h4>Voltage Rank Percentile Over Rest — rank (context only, not scored)</h4>
           {{ mod.rank_chart | safe }}
         </div>
         <div class="chart-box">

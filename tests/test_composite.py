@@ -36,19 +36,39 @@ def test_correlated_pair_counts_once_in_n_high():
 
 
 def test_mean_reduce_averages_disagreeing_members():
-    """rank firing while spread is quiet must not carry the whole cluster."""
-    mrs = _cell({"rank": 2.8, "spread": -0.1})
+    """cusum firing while thermal_corr is quiet must not carry the whole cluster."""
+    mrs = _cell({"cusum": 2.8, "thermal_corr": -0.1})
     _, n_high, scores = _composite_clustered(mrs, AggregateParams(), CompositeParams())
-    assert scores["fleet_divergence"] == pytest.approx((2.8 - 0.1) / 2)
+    assert scores["residual_dynamics"] == pytest.approx((2.8 - 0.1) / 2)
     assert n_high == 0
 
 
 def test_max_reduce_takes_strongest_member():
-    mrs = _cell({"rank": 2.8, "spread": -0.1})
+    mrs = _cell({"cusum": 2.8, "thermal_corr": -0.1})
     comp = CompositeParams(reduce="max")
     _, n_high, scores = _composite_clustered(mrs, AggregateParams(), comp)
-    assert scores["fleet_divergence"] == pytest.approx(2.8)
+    assert scores["residual_dynamics"] == pytest.approx(2.8)
     assert n_high == 1
+
+
+def test_rank_is_advisory_and_never_enters_composite():
+    """rank is report-only: even a finite z must not reach the composite,
+    n_high or any cluster score, in clustered or legacy mode."""
+    from stress_screen.analysis.aggregate import CLUSTERS, _composite_legacy
+
+    assert CLUSTERS["fleet_divergence"] == ("spread",)
+    assert not any("rank" in members for members in CLUSTERS.values())
+
+    mrs = _cell({"rank": 5.0, "spread": 0.4})
+    composite, n_high, scores = _composite_clustered(mrs, AggregateParams(), CompositeParams())
+    assert "rank" not in scores
+    assert scores["fleet_divergence"] == pytest.approx(0.4)
+    assert n_high == 0
+    assert composite == pytest.approx(0.4 / len(CLUSTERS))
+
+    legacy_z, legacy_n_high = _composite_legacy(mrs, AggregateParams())
+    assert legacy_n_high == 0
+    assert legacy_z == pytest.approx(0.4 / (len(REAL_METHODS) - 1))
 
 
 def test_nan_members_skipped():
@@ -101,7 +121,7 @@ def test_cluster_scores_winsorized():
 
 def test_independent_signals_not_diluted_vs_legacy():
     """A strong li_plating signal carries more weight per-cluster (1 of 5)
-    than per-method (1 of 8) — the dilution fix."""
+    than per-method (1 of 7 scored methods) — the dilution fix."""
     mrs = _cell({"li_plating": 5.0})
     legacy_z, _ = _composite_legacy(mrs, AggregateParams())
     clustered_z, _, _ = _composite_clustered(
@@ -109,12 +129,13 @@ def test_independent_signals_not_diluted_vs_legacy():
     )
     assert clustered_z > legacy_z
     assert clustered_z == pytest.approx(1.0)   # 5.0 / 5 clusters
-    assert legacy_z == pytest.approx(5.0 / 8)  # 5.0 / 8 methods
+    assert legacy_z == pytest.approx(5.0 / 7)  # 5.0 / 7 scored methods (rank is advisory)
 
 
 def test_legacy_mode_bit_compatible():
-    """_composite_legacy must reproduce the historical plain mean exactly."""
+    """_composite_legacy must reproduce the historical plain mean exactly
+    over the scored methods; the advisory rank entry is excluded."""
     mrs = _cell({"ocv_k": 3.0, "rank": -1.0, "isc": 0.5})
     legacy_z, n_high = _composite_legacy(mrs, AggregateParams())
-    assert legacy_z == pytest.approx((3.0 - 1.0 + 0.5) / 8)
+    assert legacy_z == pytest.approx((3.0 + 0.5) / 7)
     assert n_high == 1

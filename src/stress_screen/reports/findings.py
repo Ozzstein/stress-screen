@@ -59,8 +59,13 @@ METHOD_DESCRIPTIONS: dict[str, tuple[str, str]] = {
         "Excess self-discharge after removing temperature bias.",
     ),
     "rank": (
-        "Voltage-rank percentile of the cell within its module over rest.",
-        "Cells sliding down the within-module ranking.",
+        "Percentile rank of the cell's T-compensated voltage within the pack "
+        "over rest: mean rank and share of samples in the bottom 20 %. "
+        "Context only — not scored.",
+        "Nothing on its own. Percentile rank has no resolution on 1 mV tester "
+        "data (ties; healthy cells reshuffle as the slowest-relaxing module "
+        "settles) and the bottom-20 % share reflects static SOC ordering, so "
+        "it never enters the composite.",
     ),
     "li_plating": (
         "dQ/dV extra-peak detection above the main plateau, post-charge "
@@ -78,9 +83,9 @@ METHOD_DESCRIPTIONS: dict[str, tuple[str, str]] = {
 }
 
 VERDICT_RULES_TEXT = (
-    "The eight methods group into five evidence clusters — self_discharge "
+    "The seven scored methods group into five evidence clusters — self_discharge "
     "(ocv_k, temp_k), residual_dynamics (thermal_corr, cusum), "
-    "fleet_divergence (spread, rank), li_plating, and isc — because cluster "
+    "fleet_divergence (spread), li_plating, and isc — because cluster "
     "members are redundant readings of the same physical signal. Member "
     "z-scores are averaged within their cluster, each cluster score is "
     "winsorized to ±8, and the cell composite is the weighted mean of the "
@@ -341,9 +346,8 @@ def _param_rows(m: dict[str, MethodResult]) -> list[ParamRow]:
     rows.append(row(g, "Divergence slope (T-compensated)",
                     k_to_mv_per_h(_meta(m, "spread", "divergence_slope_v_per_h")),
                     _z(m, "spread")))
-    rows.append(row(g, "Mean rank percentile",
-                    fmt_num(_meta(m, "rank", "mean_rank_pct"), 1, "%"),
-                    _z(m, "rank")))
+    rows.append(row(g, "Mean rank percentile (context, not scored)",
+                    fmt_num(_meta(m, "rank", "mean_rank_pct"), 1, "%")))
     rows.append(row(g, "Fraction of samples in bottom 20 %",
                     fmt_num(_meta(m, "rank", "frac_bot20"), 0, "%", scale=100)))
     rows.append(row(g, "Rank slope",

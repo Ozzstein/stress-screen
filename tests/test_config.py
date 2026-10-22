@@ -69,6 +69,16 @@ def test_unknown_key_rejected(tmp_path):
         load_config(config_path=cfg, chem="lfp")
 
 
+def test_removed_rank_scoring_keys_rejected(tmp_path):
+    """The M6 (rank) scoring knobs are gone: rank is report-only and has no
+    score to weight or cap. A stale config must fail loudly, not silently."""
+    for key in ("m6_slope_weight", "m6_max_slope_contribution"):
+        cfg = tmp_path / f"{key}.yaml"
+        cfg.write_text(f"rest:\n  {key}: 0.5\n")
+        with pytest.raises(ValueError, match=key):
+            load_config(config_path=cfg, chem="lfp")
+
+
 def test_unknown_section_rejected(tmp_path):
     cfg = tmp_path / "my.yaml"
     cfg.write_text("restt:\n  settling_h: 4.0\n")

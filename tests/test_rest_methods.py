@@ -72,51 +72,6 @@ def test_m5_arrhenius_vs_linear():
     assert checked, "No channel produced valid M1+M5 data — check _make_rest_cell_df or min_points"
 
 
-def test_m6_slope_penalises_trending_cell():
-    """Channel with declining rank but frac_bot20=0 gets higher M6 z after slope fix."""
-    rng = np.random.default_rng(0)
-    n_channels = 8
-    t = np.linspace(0, 10, 600)
-    rows = []
-    for ch in range(n_channels):
-        if ch == 0:
-            # starts highest (~87th pct), drifts toward 3rd rank — never below 20th pct
-            V = 3.450 + 0.050 * np.exp(-t / 2.0) - 0.004 * t + rng.normal(0, 1e-4, len(t))
-        elif ch in (1, 2):
-            # permanently lowest (rank 1 and 2 → always below 20th pct with 8 channels)
-            V = 3.395 + (ch - 1) * 0.002 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 1e-4, len(t))
-        else:
-            # stable middle channels, slope ≈ 0
-            V = 3.420 + (ch - 3) * 0.003 + 0.050 * np.exp(-t / 2.0) + rng.normal(0, 1e-4, len(t))
-        T = 25.0 + rng.normal(0, 0.05, len(t))
-        for i in range(len(t)):
-            rows.append({"time_hours": t[i], "channel_index": ch,
-                         "voltage": V[i], "temperature": T[i]})
-    rest_df = pd.DataFrame(rows)
-    topo = derive_topology(n_channels, 1)
-    results = run_rest_analysis(rest_df, topo)
-
-    m6_z_ch0 = next(mr.z_score for mr in results[0] if mr.method_name == "rank")
-    # Only compare against stable middle channels (ch3–ch7); they have near-zero slope
-    m6_z_stable = [
-        next(mr.z_score for mr in results[ch] if mr.method_name == "rank")
-        for ch in range(3, 8)
-    ]
-    assert m6_z_ch0 > float(np.nanmedian(m6_z_stable)) + 0.5, (
-        f"Trending ch0 M6 z={m6_z_ch0:.3f} should be > stable median "
-        f"{np.nanmedian(m6_z_stable):.3f} + 0.5"
-    )
-
-    # Verify the slope term is actually contributing — disable it and check ch0 z drops
-    from stress_screen.analysis.rest import RestParams
-    results_no_slope = run_rest_analysis(rest_df, topo, params=RestParams(m6_slope_weight=0.0))
-    m6_z_ch0_no_slope = next(mr.z_score for mr in results_no_slope[0] if mr.method_name == "rank")
-    assert m6_z_ch0 > m6_z_ch0_no_slope, (
-        f"Slope term must be raising ch0 M6 z: with_slope={m6_z_ch0:.3f}, "
-        f"no_slope={m6_z_ch0_no_slope:.3f}"
-    )
-
-
 def test_m5_uses_arrhenius_helper(monkeypatch):
     """M5 must delegate temperature correction to arrhenius_correction()."""
     rng = np.random.default_rng(42)
@@ -240,55 +195,6 @@ def test_m3_temperature_gradient_not_flagged():
     )
 
 
-def test_m6_slope_cap_score_formula():
-    """The cap must bound the raw slope contribution stored in M6 metadata.
-
-    For any cell whose raw_slope_contrib exceeds the cap, the capped value must
-    be strictly less than the raw value.  For cells that don't hit the cap,
-    capped == raw.  This tests the score-level computation directly and is
-    unaffected by the z-score normalisation step.
-    """
-    rng = np.random.default_rng(42)
-    n = 16
-    t = np.linspace(2.5, 60.0, 800)
-
-    rows = []
-    for ch in range(n):
-        k = 1.3e-4 if ch == 0 else 1e-4
-        V = 3.40 - k * t + rng.normal(0, 3e-5, len(t))
-        T = 25.0 + rng.normal(0, 0.05, len(t))
-        for i in range(len(t)):
-            rows.append({"time_hours": t[i], "channel_index": ch,
-                         "voltage": V[i], "temperature": T[i]})
-
-    rest_df = pd.DataFrame(rows)
-    topo = derive_topology(n, 2)  # 2 modules of 8
-
-    cap = 0.05
-    results = run_rest_analysis(rest_df, topo, params=RestParams(m6_max_slope_contribution=cap))
-
-    cap_active_on_any = False
-    for ch in range(n):
-        m6 = next(mr for mr in results[ch] if mr.method_name == "rank")
-        raw = m6.metadata.get("slope_contribution_raw", float("nan"))
-        capped = m6.metadata.get("slope_contribution_capped", float("nan"))
-        if np.isnan(raw):
-            continue
-        if raw > cap:
-            assert capped == pytest.approx(cap, abs=1e-9), (
-                f"ch{ch}: raw={raw:.4f} > cap={cap} but capped={capped:.4f} != cap"
-            )
-            cap_active_on_any = True
-        else:
-            assert capped == pytest.approx(raw, abs=1e-9), (
-                f"ch{ch}: raw={raw:.4f} ≤ cap={cap} but capped={capped:.4f} != raw"
-            )
-
-    assert cap_active_on_any, (
-        "No channel had raw_slope_contrib > cap — increase drift or lower cap"
-    )
-
-
 def test_thermal_corr_edge_cell_penalty():
     """Single-sensor cells (G1, G8) get a 1/√2 penalty on thermal_corr z to
     correct for their structurally higher temperature-measurement noise.
@@ -326,3 +232,29 @@ def test_thermal_corr_edge_cell_penalty():
         f"Edge-cell |z|={np.nanmean(np.abs(edge_z)):.3f} should be substantially "
         f"lower than interior-cell |z|={np.nanmean(np.abs(interior_z)):.3f}"
     )
+
+
+def test_rank_is_report_only():
+    """rank carries its statistics for the report but never a z-score.
+
+    Percentile rank has no resolution on 1 mV tester data (ties, and healthy
+    cells reshuffle by tens of percentile points as the slowest-relaxing
+    module settles) and its bottom-20 % share flags static SOC ordering, not
+    drift. The statistics feed the rank chart and the per-cell table; the
+    z-score is NaN so the method can never reach a verdict.
+    """
+    rng = np.random.default_rng(0)
+    rest_df = _make_rest_cell_df(n_channels=8, bad_channels=[1], rng=rng)
+    results = run_rest_analysis(rest_df, derive_topology(8, 1))
+
+    for ch, mrs in results.items():
+        rank = next(mr for mr in mrs if mr.method_name == "rank")
+        assert np.isnan(rank.z_score), f"ch{ch}: rank must not be scored, got z={rank.z_score}"
+        assert rank.verdict == "NORMAL"
+        for key in ("mean_rank_pct", "frac_bot20", "rank_slope"):
+            assert np.isfinite(rank.metadata[key]), f"ch{ch}: {key} missing from rank metadata"
+        assert "slope_contribution_raw" not in rank.metadata
+
+    # The permanently lowest cell (bad_channels=[1]) is still visible in the
+    # statistics even though it is no longer scored.
+    assert next(mr for mr in results[1] if mr.method_name == "rank").metadata["frac_bot20"] > 0.9

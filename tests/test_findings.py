@@ -32,10 +32,9 @@ def _full_metadata_cell(verdict="HIGH", composite=2.6) -> CellVerdict:
         MethodResult("temp_k", 3.0, "HIGH",
                      {"k_corrected": 0.9e-3, "T_mean": 27.3,
                       "temp_correction_applied": True}),
-        MethodResult("rank", 2.4, "HIGH",
+        MethodResult("rank", NAN, "NORMAL",  # report-only: never scored
                      {"mean_rank_pct": 12.0, "frac_bot20": 0.84,
-                      "rank_slope": -0.5, "slope_contribution_raw": 2.0,
-                      "slope_contribution_capped": 1.0}),
+                      "rank_slope": -0.5}),
         MethodResult("li_plating", 1.1, "ELEVATED",
                      {"dqdv_z": 2.3, "relaxation_z": 0.5, "charge_time_z": 0.1,
                       "dqdv_extra_peak_sum": 0.12,

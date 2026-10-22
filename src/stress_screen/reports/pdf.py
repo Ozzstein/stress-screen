@@ -208,9 +208,10 @@ def _page_methodology(styles: dict) -> list:
         Paragraph("Methodology", styles["h1"]),
         Spacer(1, 0.2 * cm),
         Paragraph(
-            "Each cell-group is scored by eight detection methods; every "
-            "method produces a robust z-score (median/MAD against this "
-            "pack's own fleet). Divergence and rank charts are smoothed "
+            "Each cell-group is scored by seven detection methods; every "
+            "scored method produces a robust z-score (median/MAD against this "
+            "pack's own fleet). The rank statistics are context only and are "
+            "not scored. Divergence and rank charts are smoothed "
             "with a ~30-min rolling median for display only — detection "
             "always runs on raw data.",
             styles["small"],

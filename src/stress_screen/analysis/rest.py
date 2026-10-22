@@ -1,7 +1,8 @@
 """
-analysis/rest.py — Six OCV-rest detection methods for stress_screen.
+analysis/rest.py — OCV-rest detection methods for stress_screen.
 
-Methods: ocv_k, thermal_corr, spread, cusum, temp_k, rank.
+Scored methods: ocv_k, thermal_corr, spread, cusum, temp_k.
+Report-only statistics: rank (percentile-rank trajectory; never scored).
 
 Each method operates on a single rest segment (post-settling) of the long-format
 cell voltage DataFrame and returns a MethodResult per channel.
@@ -69,19 +70,6 @@ class RestParams:
 
     arrhenius_ea_ev: float = 0.5
     """Activation energy (eV) for Arrhenius self-discharge temperature correction (LFP default)."""
-
-    m6_slope_weight: float = 0.5
-    """Weight applied to the rank-slope penalty term in the M6 composite score."""
-
-    m6_max_slope_contribution: float = 1.0
-    """Maximum contribution the slope term can add to the M6 score.
-
-    The raw slope term is -rank_slope × t_span (units: %-rank). For a 54 h rest
-    a module drifting at 0.2 %/h generates 10.8 per cell — enough to flag every
-    cell in the module HIGH from module-level SOC drift alone. Capping at 1.0
-    limits this flood while still distinguishing cells with genuinely rapid rank
-    decline from their module-mates.
-    """
 
     m3_min_slope_mad_v_per_h: float = 5e-6
     """Lower bound of the MAD scale (V/h) for M3 divergence-slope z-scores.
@@ -164,7 +152,7 @@ def run_rest_analysis(
     topology: PackTopology,
     params: RestParams | None = None,
 ) -> dict[int, list[MethodResult]]:
-    """Run the six rest-phase detection methods on cell data.
+    """Run the rest-phase detection methods on cell data.
 
     Parameters
     ----------
@@ -179,7 +167,8 @@ def run_rest_analysis(
     Returns
     -------
     dict mapping ``channel_index`` (int) to a list of six ``MethodResult``
-    objects (one per method: ocv_k, thermal_corr, spread, cusum, temp_k, rank).
+    objects (ocv_k, thermal_corr, spread, cusum, temp_k, rank). ``rank`` is
+    report-only: its z-score is always NaN and it never enters a verdict.
     """
     if params is None:
         params = RestParams()
@@ -475,68 +464,40 @@ def run_rest_analysis(
     m5_z: dict[int, float] = {ch: float(k_corr_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
-    # M6 — Percentile rank tracking                                         #
+    # M6 — Percentile rank statistics (report-only, never scored)          #
     # ------------------------------------------------------------------ #
+    # Percentile rank has no resolution on tester data: voltages are 1 mV
+    # quantised and a healthy fleet sits within a few mV, so ranks are
+    # dominated by ties, and the fleet median moves through the bulk as the
+    # slowest-relaxing module settles, reshuffling healthy cells by tens of
+    # percentile points. The bottom-20 % share flags static SOC ordering,
+    # not drift. The statistics are kept for the rank chart and the per-cell
+    # table; the method's z-score is NaN so it never enters a verdict
+    # (see aggregate.ADVISORY_METHODS).
     m6_mean_rank: dict[int, float] = {}
     m6_frac_bot20: dict[int, float] = {}
     m6_rank_slope: dict[int, float] = {}
-    m6_t_span: dict[int, float] = {}
 
-    if not pivot_v_adj.empty:
-        rank_pct = pivot_v_adj.rank(axis=1, pct=True, method="average") * 100.0
-
-        for ch in channels:
-            if ch in rank_pct.columns and chan_data[ch]["n_set"] >= params.min_points:
-                rs = rank_pct[ch].dropna()
-                t_r = rs.index.values
-                r_r = rs.values
-
-                mean_rank = float(r_r.mean())
-                frac_bot20 = float((r_r < 20.0).mean())
-
-                if len(t_r) >= 2:
-                    slope_r, *_ = _stats.linregress(t_r, r_r)
-                else:
-                    slope_r = 0.0
-
-                m6_mean_rank[ch] = mean_rank
-                m6_frac_bot20[ch] = frac_bot20
+    rank_pct = (
+        pivot_v_adj.rank(axis=1, pct=True, method="average") * 100.0
+        if not pivot_v_adj.empty else pd.DataFrame()
+    )
+    for ch in channels:
+        if ch in rank_pct.columns and chan_data[ch]["n_set"] >= params.min_points:
+            rs = rank_pct[ch].dropna()
+            t_r = rs.index.values
+            r_r = rs.values
+            m6_mean_rank[ch] = float(r_r.mean())
+            m6_frac_bot20[ch] = float((r_r < 20.0).mean())
+            if len(t_r) >= 2:
+                slope_r, *_ = _stats.linregress(t_r, r_r)
                 m6_rank_slope[ch] = float(slope_r)
-                t_span_ch = float(t_r[-1] - t_r[0]) if len(t_r) >= 2 else 0.0
-                m6_t_span[ch] = t_span_ch
             else:
-                m6_mean_rank[ch] = np.nan
-                m6_frac_bot20[ch] = np.nan
-                m6_rank_slope[ch] = np.nan
-                m6_t_span[ch] = 0.0
-    else:
-        for ch in channels:
+                m6_rank_slope[ch] = 0.0
+        else:
             m6_mean_rank[ch] = np.nan
             m6_frac_bot20[ch] = np.nan
             m6_rank_slope[ch] = np.nan
-            m6_t_span[ch] = 0.0
-
-    m6_score: dict[int, float] = {}
-    m6_slope_raw: dict[int, float] = {}
-    m6_slope_capped: dict[int, float] = {}
-    for ch in channels:
-        fb = m6_frac_bot20.get(ch, np.nan)
-        if np.isnan(fb):
-            m6_score[ch] = np.nan
-            m6_slope_raw[ch] = np.nan
-            m6_slope_capped[ch] = np.nan
-        else:
-            slope = m6_rank_slope.get(ch, 0.0)
-            t_span = m6_t_span.get(ch, 0.0)
-            raw_slope_contrib = max(0.0, -slope * t_span)
-            capped_slope_contrib = min(raw_slope_contrib, params.m6_max_slope_contribution)
-            m6_score[ch] = fb + params.m6_slope_weight * capped_slope_contrib
-            m6_slope_raw[ch] = raw_slope_contrib
-            m6_slope_capped[ch] = capped_slope_contrib
-
-    score_arr = np.array([m6_score[ch] for ch in channels])
-    score_z_arr = robust_z(score_arr)
-    m6_z: dict[int, float] = {ch: float(score_z_arr[i]) for i, ch in enumerate(channels)}
 
     # ------------------------------------------------------------------ #
     # Assemble results                                                      #
@@ -625,26 +586,15 @@ def run_rest_analysis(
                 },
             )
 
-        # M6
-        if insufficient or np.isnan(m6_frac_bot20.get(ch, np.nan)):
-            m6_res = _nan_result(
-                "rank",
-                {"mean_rank_pct": np.nan, "frac_bot20": np.nan, "rank_slope": np.nan},
-            )
-        else:
-            z6 = m6_z[ch]
-            m6_res = MethodResult(
-                method_name="rank",
-                z_score=z6,
-                verdict=_verdict(z6, params.z_thresh),
-                metadata={
-                    "mean_rank_pct": m6_mean_rank[ch],
-                    "frac_bot20": m6_frac_bot20[ch],
-                    "rank_slope": m6_rank_slope[ch],
-                    "slope_contribution_raw": m6_slope_raw[ch],
-                    "slope_contribution_capped": m6_slope_capped[ch],
-                },
-            )
+        # M6 — report-only statistics, never scored (see the M6 block).
+        m6_res = _nan_result(
+            "rank",
+            {
+                "mean_rank_pct": m6_mean_rank.get(ch, np.nan),
+                "frac_bot20": m6_frac_bot20.get(ch, np.nan),
+                "rank_slope": m6_rank_slope.get(ch, np.nan),
+            },
+        )
 
         results[ch] = [m1_res, m2_res, m3_res, m4_res, m5_res, m6_res]
 
