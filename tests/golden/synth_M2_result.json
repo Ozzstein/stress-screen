@@ -1,10 +1,13 @@
 {
+  "_baseline": {
+    "platform": "Linux-x86_64"
+  },
   "schema_version": 3,
   "tool_version": "0.2.0",
-  "generated_at": "2026-10-21T15:07:13.601598+00:00",
+  "generated_at": "2026-10-22T09:10:45.789289+00:00",
   "input": {
     "csv_name": "SynthPack_D01032026_080000_M2.csv",
-    "csv_path": "/tmp/pytest-of-ozzstein/pytest-14/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
+    "csv_path": "/tmp/pytest-of-ozzstein/pytest-21/test_pipeline_matches_golden0/SynthPack_D01032026_080000_M2.csv",
     "file_size_bytes": 534573,
     "pack_id": "SynthPack",
     "test_date": "2026-03-01",

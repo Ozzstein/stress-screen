@@ -33,6 +33,7 @@ jobs:
       - name: Run test suite
         run: pytest -q
         env:
-          # Golden floats were baselined on macOS/arm64; scipy fits differ
-          # slightly per platform. Verdicts are still compared exactly.
+          # CI always compares golden floats loosely; the strict gate runs only
+          # on the platform that generated the golden file (recorded in its
+          # _baseline key). Verdicts are still compared exactly.
           STRESS_SCREEN_GOLDEN_LOOSE: "1"

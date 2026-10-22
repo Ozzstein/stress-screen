@@ -397,7 +397,11 @@ The test suite contains 130+ tests covering:
 
 To intentionally re-baseline the golden file after a deliberate behavior
 change: `STRESS_SCREEN_REGEN_GOLDEN=1 PYTHONPATH=src uv run pytest
-tests/test_golden.py`, then review the diff and commit it.
+tests/test_golden.py`, then review the diff and commit it. The strict float
+comparison applies only on the platform that generated the golden file
+(recorded in its `_baseline` key); on any other platform the test falls back
+to a loose tolerance and prints a warning. Regenerating makes the current
+machine the baseline.
 
 ## Project layout
 
