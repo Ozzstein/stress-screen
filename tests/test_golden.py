@@ -218,6 +218,9 @@ def test_pipeline_matches_golden(tmp_path):
         f"{len(problems)} deviations from golden output (first 20), using "
         f"rel_tol={rel_tol}, abs_tol={abs_tol} because {reason}:\n"
         + "\n".join(problems[:20])
+        + "\nSet STRESS_SCREEN_GOLDEN_LOOSE=1 to compare floats loosely, "
+        "or regenerate the golden on this machine with "
+        "STRESS_SCREEN_REGEN_GOLDEN=1."
     )
 
 
