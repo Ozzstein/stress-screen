@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 2P16S packs: temperature columns are now read using the tester's per-module-pair layout. Modules 2 and 4 previously loaded with no temperatures, which silently distorted every module's z-scores (a5ba71e).
 - Tester filenames with year-first dates (`_D20261002_`) now give the correct test date instead of "unknown" (13d4b14).
-- `spread`: the MAD floor is now one voltage quantisation step over the rest duration, so a single 1 mV step over the rest no longer scores as an outlier on its own, while a genuine drift of a few millivolts still scores HIGH (e02b055).
+- `spread`: the MAD floor is now one voltage quantisation step over the rest duration, so a single 1 mV step over the rest no longer scores HIGH on its own, while a genuine drift of a few millivolts still scores HIGH (e02b055).
 - PDF export: Plotly is pinned below 7, which dropped support for the bundled Kaleido 0.2 renderer, so fresh installs and release builds still produce PDF reports (5d4f47d).
 
 ### Changed
@@ -33,11 +33,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.2.0] - 2026-07-07
 
-Previous release; see the GitHub release notes.
+Previous release; see the commit history linked from its GitHub release page.
 
 ## [0.1.0] - 2026-07-01
 
-Previous release; see the GitHub release notes.
+Previous release; see the commit history linked from its GitHub release page.
 
 [Unreleased]: https://github.com/Ozzstein/stress-screen/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/Ozzstein/stress-screen/compare/v0.2.0...v0.3.0
